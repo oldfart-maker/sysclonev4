@@ -71,3 +71,5 @@ connect_wifi() {
     return 1
   fi
 }
+
+main "$@"
