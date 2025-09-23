@@ -13,17 +13,6 @@ IMG_RAW := $(IMG_XZ:.img.xz=.img)
 
 .PHONY: help show-config img-download img-unpack sd-write seed-layer1 flash-all tag version-bump
 
-help:
-	@echo 'Targets:'
-	@echo '  show-config                         - Show important variables'
-	@echo '  img-download [IMG_URL=...]          - Download the image (.xz) into $(CACHE_DIR)/'
-	@echo '  img-unpack                          - Decompress .xz into a raw .img (once)'
-	@echo '  sd-write DEVICE=/dev/sdX CONFIRM=yes- Write raw image to SD (DESTRUCTIVE)'
-	@echo '  seed-layer1'
-	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
-	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
-	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
-
 show-config:
 	@echo "IMG_URL    = $(IMG_URL)"
 	@echo "CACHE_DIR  = $(CACHE_DIR)"
@@ -87,5 +76,15 @@ seed-layer1-auto:
 seed-layer1: seed-layer1-auto
 	@true
 
+
+.PHONY: help
 help:
-	@echo "  seed-layer1                         - Auto-mount, seed, unmount"
+	@echo 'Targets:'
+	@echo '  show-config                         - Show important variables'
+	@echo '  img-download [IMG_URL=...]          - Download the image (.xz) into cache/'
+	@echo '  img-unpack                          - Decompress .xz into a raw .img (once)'
+	@echo '  sd-write DEVICE=/dev/sdX CONFIRM=yes- Write raw image to SD (DESTRUCTIVE)'
+	@echo '  seed-layer1                         - Auto-mount, seed, unmount'
+	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
+	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
+	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
