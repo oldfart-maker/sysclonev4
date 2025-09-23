@@ -2,52 +2,94 @@
 set -euo pipefail
 
 USER_NAME="${USER:-username}"
-BOOT_MOUNT="/run/media/${USER_NAME}/BOOT"
 SRC="seeds/layer1/first-boot.sh"
-
 [[ -f "$SRC" ]] || { echo "[seed] ERROR: $SRC not found" >&2; exit 1; }
 
-# Ensure mountpoint exists (needs root under /run/media)
-sudo mkdir -p "$BOOT_MOUNT"
+# 1) If a BOOT-ish VFAT is already mounted, use it
+BOOT_MOUNT=""
+while read -r name mnt fstype label; do
+  [[ -n "$mnt" ]] || continue
+  case "$fstype" in vfat|fat|fat16|fat32) ;; *) continue ;; esac
+  if [[ "$label" =~ (BOOT|MNJRO|system-boot|boot) ]]; then
+    BOOT_MOUNT="$mnt"
+    found="pre-mounted:$label"
+    break
+  fi
+done < <(lsblk -pnro NAME,MOUNTPOINT,FSTYPE,LABEL)
 
-already_mounted=no
-if mountpoint -q "$BOOT_MOUNT"; then
-  already_mounted=yes
-fi
+# Helper: verify a mount looks like RPi BOOT
+looks_like_boot() {
+  local dir="$1"
+  [[ -f "$dir/config.txt" || -f "$dir/cmdline.txt" || -f "$dir/start4.elf" || -d "$dir/overlays" ]]
+}
 
-mounted_dev=""
-if [[ "$already_mounted" != "yes" ]]; then
-  # try to mount any vfat partition; keep the one that looks like a Pi BOOT
-  while read -r dev fstype; do
-    [[ "$fstype" == "vfat" ]] || continue
-    if sudo mount -o uid="$(id -u)",gid="$(id -g)" "$dev" "$BOOT_MOUNT" 2>/dev/null; then
-      if [[ -f "$BOOT_MOUNT/config.txt" || -f "$BOOT_MOUNT/cmdline.txt" || -f "$BOOT_MOUNT/start4.elf" ]]; then
-        mounted_dev="$dev"
-        break
-      fi
-      sudo umount "$BOOT_MOUNT" || true
+# Helper: try mount a device into a temp BOOT mountpoint
+try_mount() {
+  local dev="$1"
+  local mnt="/run/media/${USER_NAME}/BOOT"
+  sudo mkdir -p "$mnt"
+  if sudo mount -o uid="$(id -u)",gid="$(id -g)" "$dev" "$mnt" 2>/dev/null; then
+    if looks_like_boot "$mnt"; then
+      echo "$dev" > "$mnt/.sysclone-mounted-dev"
+      BOOT_MOUNT="$mnt"
+      return 0
     fi
-  done < <(lsblk -pno NAME,FSTYPE)
+    sudo umount "$mnt" || true
+  fi
+  return 1
+}
+
+# 2) Try recorded UUID first (deterministic) if present
+if [[ -z "$BOOT_MOUNT" && -f .state/boot-uuid ]]; then
+  uuid="$(< .state/boot-uuid)"
+  if [[ -n "$uuid" ]]; then
+    dev="$(blkid -U "$uuid" 2>/dev/null || true)"
+    [[ -n "$dev" ]] && try_mount "$dev" && found="uuid:$uuid"
+  fi
 fi
 
-if ! mountpoint -q "$BOOT_MOUNT"; then
-  echo "[seed] ERROR: could not auto-mount BOOT (vfat). Mount it at $BOOT_MOUNT and re-run." >&2
+# 3) Try well-known labels next
+if [[ -z "$BOOT_MOUNT" ]]; then
+  for lbl in BOOT_MNJRO BOOT system-boot boot; do
+    dev="$(blkid -L "$lbl" 2>/dev/null || true)"
+    [[ -n "$dev" ]] && try_mount "$dev" && { found="label:$lbl"; break; }
+  done
+fi
+
+# 4) Prefer vfat with boot-ish label, then any vfat/fat
+if [[ -z "$BOOT_MOUNT" ]]; then
+  mapfile -t candidates < <(lsblk -pnro NAME,FSTYPE,LABEL | awk 'BEGIN{IGNORECASE=1} $2 ~ /^(vfat|fat|fat16|fat32)$/ && $3 ~ /boot|mnjro/ {print $1}')
+  mapfile -t others    < <(lsblk -pnro NAME,FSTYPE      | awk '$2 ~ /^(vfat|fat|fat16|fat32)$/ {print $1}')
+  for dev in "${candidates[@]}" "${others[@]}"; do
+    [[ -n "$dev" ]] || continue
+    try_mount "$dev" && { found="scan:$dev"; break; }
+  done
+fi
+
+if [[ -z "$BOOT_MOUNT" ]]; then
+  echo "[seed] ERROR: could not auto-mount BOOT (FAT/VFAT)." >&2
+  echo "[seed] Tips:" >&2
+  echo "  sudo mkdir -p /run/media/$USER/BOOT" >&2
+  echo "  sudo mount -o uid=$(id -u),gid=$(id -g) -L BOOT_MNJRO /run/media/$USER/BOOT" >&2
+  echo "  # or: pick from lsblk -pno NAME,SIZE,FSTYPE,LABEL,PARTLABEL" >&2
   exit 1
 fi
 
-echo "[seed] Using BOOT at: $BOOT_MOUNT"
+echo "[seed] Using BOOT: $BOOT_MOUNT (${found:-pre-mounted})"
 install -Dm644 "$SRC" "$BOOT_MOUNT/sysclone-first-boot.sh"
-cat > "$BOOT_MOUNT/README-sysclone.txt" <<'R'
+cat > "$BOOT_MOUNT/README-sysclone.txt" <<'TXT'
 SysClone v4 Layer1 seed
 
 On the Pi (after first boot):
   sudo install -Dm755 /boot/sysclone-first-boot.sh /usr/local/sbin/sysclone-first-boot.sh
   sudo /usr/local/sbin/sysclone-first-boot.sh
-R
-
+TXT
 echo "[seed] Seed complete."
-if [[ -n "$mounted_dev" ]]; then
-  echo "[seed] Sync + unmount ($mounted_dev)"
+
+if [[ -f "$BOOT_MOUNT/.sysclone-mounted-dev" ]]; then
+  dev="$(cat "$BOOT_MOUNT/.sysclone-mounted-dev" || true)"
+  rm -f "$BOOT_MOUNT/.sysclone-mounted-dev"
+  echo "[seed] Sync + unmount ($dev)"
   sync
   sudo umount "$BOOT_MOUNT"
 fi

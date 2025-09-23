@@ -62,19 +62,6 @@ sd-write: $(IMG_RAW)
 	@echo "Done writing image to $(DEVICE)."
 	@echo "Tip: re-plug the SD card so partitions are re-read before seeding."
 
-seed-layer1:
-	@if [[ -z "$(BOOT_MOUNT)" ]]; then echo "ERROR: set BOOT_MOUNT=/path/to/BOOT (vfat)"; exit 1; fi
-	@if [[ ! -d "$(BOOT_MOUNT)" ]]; then echo "ERROR: BOOT_MOUNT does not exist: $(BOOT_MOUNT)"; exit 1; fi
-	@echo "Seeding Layer 1 to $(BOOT_MOUNT)..."
-	@install -Dm644 seeds/layer1/first-boot.sh "$(BOOT_MOUNT)/sysclone-first-boot.sh"
-	@{ \
-			echo "SysClone v4 Layer1 seed"; \
-			echo "On the Pi (after first boot):"; \
-			echo "  sudo install -Dm755 /boot/sysclone-first-boot.sh /usr/local/sbin/sysclone-first-boot.sh"; \
-			echo "  sudo /usr/local/sbin/sysclone-first-boot.sh"; \
-		} > "$(BOOT_MOUNT)/README-sysclone.txt"
-	@echo "Seed complete."
-
 flash-all: img-download img-unpack sd-write
 	@echo "flash-all start"
 
@@ -95,5 +82,10 @@ seed-layer1-auto:
 	./tools/seed-layer1-auto.sh
 
 .PHONY: seed-layer1
+
+.PHONY: seed-layer1
 seed-layer1: seed-layer1-auto
 	@true
+
+help:
+	@echo "  seed-layer1                         - Auto-mount, seed, unmount"
