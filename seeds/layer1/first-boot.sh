@@ -2,7 +2,6 @@
 set -Eeuo pipefail
 
 # -------- Config flags (all optional except --user for user creation) --------
- make clone-pi DEV=/dev/sdc WIFI_SSID='ATT6Syj7QR' WIFI_PSK='8ks#764g3bh6'
 HOSTNAME="archpi5"
 NEW_USER="username"
 NEW_USER_PASS="username"
@@ -92,7 +91,6 @@ EOFPSK
   echo "[L1] provisioned iwd PSK for '${WIFI_SSID}'"
 }
 
-wait_network_online() {
   echo "[L1] waiting up to ${NET_ONLINE_TIMEOUT}s for network-online…"
   if ! timeout "${NET_ONLINE_TIMEOUT}"s bash -c 'until systemctl is-active --quiet network-online.service; do sleep 1; done'; then
     echo "[L1] WARN: network-online not reached; continuing"
@@ -149,8 +147,6 @@ main() {
   setup_system_id
   echo "[L1] user/sudo"
   setup_user_sudo
-  echo "[L1] wait for network-online"
-  wait_network_online
   echo "[L1] done. You can: systemctl reboot"
 }
 main "$@"
