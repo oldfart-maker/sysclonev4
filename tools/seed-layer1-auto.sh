@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BOOT_MOUNT="/run/media/username/BOOT"
+USER_NAME="${USER:-username}"
+BOOT_MOUNT="/run/media/${USER_NAME}/BOOT"
 SRC="seeds/layer1/first-boot.sh"
 
-# sanity
 [[ -f "$SRC" ]] || { echo "[seed] ERROR: $SRC not found" >&2; exit 1; }
 
-mkdir -p "$BOOT_MOUNT"
+# Ensure mountpoint exists (needs root under /run/media)
+sudo mkdir -p "$BOOT_MOUNT"
 
 already_mounted=no
 if mountpoint -q "$BOOT_MOUNT"; then
@@ -16,7 +17,7 @@ fi
 
 mounted_dev=""
 if [[ "$already_mounted" != "yes" ]]; then
-  # scan all vfat block partitions and mount each candidate until we see Pi boot files
+  # try to mount any vfat partition; keep the one that looks like a Pi BOOT
   while read -r dev fstype; do
     [[ "$fstype" == "vfat" ]] || continue
     if sudo mount -o uid="$(id -u)",gid="$(id -g)" "$dev" "$BOOT_MOUNT" 2>/dev/null; then
@@ -29,7 +30,6 @@ if [[ "$already_mounted" != "yes" ]]; then
   done < <(lsblk -pno NAME,FSTYPE)
 fi
 
-# verify we have a writable BOOT mount
 if ! mountpoint -q "$BOOT_MOUNT"; then
   echo "[seed] ERROR: could not auto-mount BOOT (vfat). Mount it at $BOOT_MOUNT and re-run." >&2
   exit 1
