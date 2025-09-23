@@ -11,9 +11,6 @@ Usage: $0 [--wifi-ssid SSID --wifi-pass PASS]
 USAGE
 }
 
-WIFI_SSID=""
-WIFI_PASS=""
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --wifi-ssid) WIFI_SSID="${2-}"; shift 2;;
