@@ -6,7 +6,7 @@ IMG_URL ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915
 CACHE_DIR ?= cache
 DEVICE ?=
 CONFIRM ?=
-BOOT_MOUNT ?=
+BOOT_MOUNT := /run/media/username/BOOT
 
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.img.xz=.img)
@@ -19,7 +19,7 @@ help:
 	@echo '  img-download [IMG_URL=...]          - Download the image (.xz) into $(CACHE_DIR)/'
 	@echo '  img-unpack                          - Decompress .xz into a raw .img (once)'
 	@echo '  sd-write DEVICE=/dev/sdX CONFIRM=yes- Write raw image to SD (DESTRUCTIVE)'
-	@echo '  seed-layer1 BOOT_MOUNT=/mnt/BOOT    - Copy first-boot script to BOOT (vfat)'
+	@echo '  seed-layer1'
 	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
 	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
 	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
