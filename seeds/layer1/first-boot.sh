@@ -136,9 +136,6 @@ EOFL
 
 main() {
   as_root
-  echo "[L1] pacman -Syu"
-  echo "[L1] install base packages"
-  echo "[L1] enable sshd"
   systemctl enable sshd.service
   echo "[L1] configure network stack"
   setup_network
