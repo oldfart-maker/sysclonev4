@@ -77,6 +77,23 @@ fi
 
 echo "[seed] Using BOOT: $BOOT_MOUNT (${found:-pre-mounted})"
 install -Dm644 "$SRC" "$BOOT_MOUNT/sysclone-first-boot.sh"
+
+# --- sysclone: inject WIFI creds right after copy (before unmount) ---
+if [[ -n "${WIFI_SSID:-}" && -n "${WIFI_PASS:-}" && -f "$BOOT_MOUNT/sysclone-first-boot.sh" ]]; then
+  echo "[seed] injecting WIFI_SSID/WIFI_PASS into sysclone-first-boot.sh (SSID=${WIFI_SSID})"
+  tmp="$BOOT_MOUNT/.sysclone-first-boot.sh.tmp"
+  {
+    head -n1 "$BOOT_MOUNT/sysclone-first-boot.sh"
+    printf WIFI_SSID=%q
+WIFI_PASS=%q
+ "$WIFI_SSID" "$WIFI_PASS"
+    tail -n +2 "$BOOT_MOUNT/sysclone-first-boot.sh"
+  } > "$tmp"
+  mv -f "$tmp" "$BOOT_MOUNT/sysclone-first-boot.sh"
+  sync
+fi
+# --- end injection ---
+
 cat > "$BOOT_MOUNT/README-sysclone.txt" <<'TXT'
 SysClone v4 Layer1 seed
 
