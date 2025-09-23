@@ -39,15 +39,6 @@ EOFPSK
   log "provisioned iwd PSK for '${WIFI_SSID}'"
 }
 
-main() {
-  log "starting minimal first-boot"
-  provision_wifi
-  connect_wifi
-  log "done"
-}
-
-main "$@"
-
 connect_wifi() {
   # Only attempt when we have creds
   [[ -z "$WIFI_SSID" ]] && return 0
@@ -70,6 +61,13 @@ connect_wifi() {
     log "iwctl connect failed on $WLAN_IF to '$WIFI_SSID'"
     return 1
   fi
+}
+
+main() {
+  log "starting minimal first-boot"
+  provision_wifi
+  connect_wifi
+  log "done"
 }
 
 main "$@"
