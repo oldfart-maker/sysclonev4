@@ -42,7 +42,32 @@ EOFPSK
 main() {
   log "starting minimal first-boot"
   provision_wifi
+  connect_wifi
   log "done"
 }
 
 main "$@"
+
+connect_wifi() {
+  # Only attempt when we have creds
+  [[ -z "$WIFI_SSID" ]] && return 0
+  [[ -z "$WIFI_PASS" ]] && { log "--wifi-ssid set but --wifi-pass missing (cannot connect)"; return 1; }
+
+  # Make sure iwd is running
+  sudo systemctl enable --now iwd >/dev/null 2>&1 || true
+
+  # Pick first wlan interface
+  local WLAN_IF
+  WLAN_IF="$(iw dev | awk '/Interface/ {print $2; exit}')"
+  if [[ -z "$WLAN_IF" ]]; then
+    log "no wlan interface found (iw dev empty)"; return 1
+  fi
+
+  # Connect using iwctl (non-interactive)
+  if sudo iwctl --passphrase "$WIFI_PASS" station "$WLAN_IF" connect "$WIFI_SSID"; then
+    log "iwctl connect issued on $WLAN_IF to '$WIFI_SSID'"
+  else
+    log "iwctl connect failed on $WLAN_IF to '$WIFI_SSID'"
+    return 1
+  fi
+}
