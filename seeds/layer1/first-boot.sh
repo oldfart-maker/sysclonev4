@@ -139,9 +139,7 @@ EOFL
 main() {
   as_root
   echo "[L1] pacman -Syu"
-  pac -Syu
   echo "[L1] install base packages"
-  pac -S base-devel git sudo openssh iwd vim curl
   echo "[L1] enable sshd"
   systemctl enable sshd.service
   echo "[L1] configure network stack"
