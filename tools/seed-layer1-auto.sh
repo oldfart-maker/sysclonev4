@@ -108,3 +108,17 @@ if [[ -n "${WIFI_SSID:-}" && -n "${WIFI_PASS:-}" && -f "$BOOT_MOUNT/sysclone-fir
   sync
 fi
 # --- end injection ---
+
+# --- sysclone: optional Wi-Fi credential injection (post-copy) ---
+if [[ -n "${WIFI_SSID:-}" && -n "${WIFI_PASS:-}" && -f "$BOOT_MOUNT/sysclone-first-boot.sh" ]]; then
+  echo "[seed] injecting WIFI_SSID/WIFI_PASS into sysclone-first-boot.sh (SSID=${WIFI_SSID})"
+  tmp="$BOOT_MOUNT/.sysclone-first-boot.sh.tmp"
+  {
+    head -n1 "$BOOT_MOUNT/sysclone-first-boot.sh"
+    printf 'WIFI_SSID=%q\nWIFI_PASS=%q\n' "$WIFI_SSID" "$WIFI_PASS"
+    tail -n +2 "$BOOT_MOUNT/sysclone-first-boot.sh"
+  } > "$tmp"
+  mv -f "$tmp" "$BOOT_MOUNT/sysclone-first-boot.sh"
+  sync
+fi
+# --- end injection ---
