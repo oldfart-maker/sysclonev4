@@ -89,3 +89,7 @@ version-bump:
 	@git add VERSION
 	@git commit -m "Bump version to $(VERSION)"
 	@echo "Version bumped to $(VERSION)"
+
+.PHONY: seed-layer1-auto
+seed-layer1-auto:
+	./tools/seed-layer1-auto.sh
