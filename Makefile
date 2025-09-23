@@ -93,3 +93,7 @@ version-bump:
 .PHONY: seed-layer1-auto
 seed-layer1-auto:
 	./tools/seed-layer1-auto.sh
+
+.PHONY: seed-layer1
+seed-layer1: seed-layer1-auto
+	@true
