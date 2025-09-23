@@ -84,7 +84,7 @@ help:
 	@echo '  img-download [IMG_URL=...]          - Download the image (.xz) into cache/'
 	@echo '  img-unpack                          - Decompress .xz into a raw .img (once)'
 	@echo '  sd-write DEVICE=/dev/sdX CONFIRM=yes- Write raw image to SD (DESTRUCTIVE)'
-	@echo '  seed-layer1                         - Auto-mount, seed, unmount'
+	@echo '  seed-layer1                         - Auto-mount, seed, unmount (WIFI_SSID=.. WIFI_PASS=.. optional)'
 	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
 	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
 	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
