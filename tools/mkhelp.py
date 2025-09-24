@@ -9,10 +9,10 @@ for line in mf.splitlines():
     if m:
         rows.append((m.group(1), m.group(2)))
 
-# Param hints per target (central, easy to edit)
+# Per-target param hints
 PARAMS = {
   "img-download": [
-    "IMG_URL (Makefile) — image URL"
+    "IMG_URL (from Makefile)"
   ],
   "img-unpack": [
     "none"
@@ -26,23 +26,20 @@ PARAMS = {
     "CONFIRM=yes (required)"
   ],
   "seed-disable-firstboot": [
-    "ROOT_PART=/dev/disk/by-label/ROOT_MNJRO (recommended)",
-    "BOOT_PART=/dev/disk/by-label/BOOT_MNJRO (recommended)",
-    "or DEVICE=/dev/sdX (optional fallback)"
+    "BOOT_LABEL / ROOT_LABEL (from Makefile)",
+    "Override: DEVICE=/dev/sdX (optional)"
   ],
   "seed-layer1": [
     "WIFI_SSID / WIFI_PASS (from Makefile)"
   ],
   "seed-first-boot-service": [
-    "ROOT_PART=/dev/disk/by-label/ROOT_MNJRO (recommended)",
-    "BOOT_PART=/dev/disk/by-label/BOOT_MNJRO (recommended)",
-    "or DEVICE=/dev/sdX (optional fallback)"
+    "BOOT_LABEL / ROOT_LABEL (from Makefile)",
+    "Override: DEVICE=/dev/sdX (optional)"
   ],
   "seed-all": [
-    "ROOT_PART=/dev/disk/by-label/ROOT_MNJRO (recommended)",
-    "BOOT_PART=/dev/disk/by-label/BOOT_MNJRO (recommended)",
+    "BOOT_LABEL / ROOT_LABEL (from Makefile)",
     "WIFI_SSID / WIFI_PASS (from Makefile)",
-    "or DEVICE=/dev/sdX (optional fallback)"
+    "Override: DEVICE=/dev/sdX (optional)"
   ],
   "show-config": [
     "none"
@@ -55,10 +52,8 @@ PARAMS = {
   ],
 }
 
-# Optional: detail view if TARGET=name is passed from make
 detail = os.environ.get("TARGET") or (sys.argv[2] if len(sys.argv) > 2 else "")
 
-# Print table
 print("Targets:")
 w = max((len(t) for t,_ in rows), default=8) + 2
 for t, d in sorted(rows, key=lambda x: x[0]):
