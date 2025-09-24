@@ -96,3 +96,10 @@ seed-first-boot-service:  ## Seed first-boot systemd service into ROOT and enabl
 	./tools/seed-first-boot-service.sh
 
 .PHONY: seed-first-boot-service
+
+# Auto-discovered help (shows any "target:  ## description")
+help:
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | sed -E 's/^([a-zA-Z0-9_.-]+):.*## (.*)$$/  \1 - \2/'
+
+.PHONY: help seed-first-boot-service
