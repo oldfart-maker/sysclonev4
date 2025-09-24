@@ -6,7 +6,10 @@ BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
 ROOT_MOUNT="${ROOT_MOUNT:-/mnt/sysclone-root}"
 
 # Resolve partitions
-if [[ -n "$DEVICE" ]]; then
+# Prefer explicit partitions if provided
+if [[ -n "${ROOT_PART:-}" if [[ -n "$DEVICE" ]]; thenif [[ -n "$DEVICE" ]]; then -n "${BOOT_PART:-}" ]]; then
+  BOOT_PART="$BOOT_PART"; ROOT_PART="$ROOT_PART"
+elif [[ -n "${DEVICE:-}" ]]; then
   BOOT_PART="${DEVICE}1"; ROOT_PART="${DEVICE}2"
   [[ "$DEVICE" =~ mmcblk ]] && BOOT_PART="${DEVICE}p1" && ROOT_PART="${DEVICE}p2"
 else
