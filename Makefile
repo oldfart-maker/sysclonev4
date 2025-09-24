@@ -1,19 +1,26 @@
-# Makefile — sysclonev4 (clean, with hard TABs)
-SHELL := /bin/bash
+# sysclonev4 — Makefile (v0.0.37)
+SHELL := /usr/bin/env bash
+.ONESHELL:
+.DELETE_ON_ERROR:
+.SUFFIXES:
 
-# Defaults (override as needed)
-IMG_URL ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
-CACHE_DIR ?= cache
-DEVICE ?=
-CONFIRM ?=
-BOOT_MOUNT := /run/media/username/BOOT
+# ---------- Config ----------
+IMG_URL    ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
+CACHE_DIR  ?= cache
+IMG_XZ     := $(CACHE_DIR)/$(notdir $(IMG_URL))
+IMG_RAW    := $(IMG_XZ:.img.xz=.img)
+DEVICE     ?=
+BOOT_MOUNT ?= /run/media/$(USER)/BOOT
+CONFIRM    ?=
 
-IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
-IMG_RAW := $(IMG_XZ:.img.xz=.img)
+# ---------- Help ----------
+# List any "target:  ## description"
+help: ## Show available targets (auto-discovered)
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | sed -E 's/^([a-zA-Z0-9_.-]+):.*## (.*)$$/  \1 - \2/'
 
-.PHONY: help show-config img-download img-unpack sd-write seed-layer1 flash-all tag version-bump
-
-show-config:
+# ---------- Utility ----------
+show-config: ## Show important variables
 	@echo "IMG_URL    = $(IMG_URL)"
 	@echo "CACHE_DIR  = $(CACHE_DIR)"
 	@echo "IMG_XZ     = $(IMG_XZ)"
@@ -22,84 +29,67 @@ show-config:
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "CONFIRM    = $(CONFIRM)"
 
-img-download:
-	@mkdir -p "$(CACHE_DIR)"
-	@echo "Downloading image from:"
-	@echo "  $(IMG_URL)"
-	@echo "-> $(IMG_XZ)"
-	@curl -L --fail --retry 3 --continue-at - -o "$(IMG_XZ).part" "$(IMG_URL)"
-	@mv -f "$(IMG_XZ).part" "$(IMG_XZ)"
-	@echo "Done."
+# ---------- Image prep ----------
+$(CACHE_DIR):
+	mkdir -p $(CACHE_DIR)
 
-img-unpack: $(IMG_XZ)
-	@if [[ ! -f "$(IMG_RAW)" ]]; then \
-			echo "Decompressing $(IMG_XZ) -> $(IMG_RAW)"; \
-			xz -T0 -dkc -- "$(IMG_XZ)" > "$(IMG_RAW)"; \
-			sync; \
-		else \
-			echo "$(IMG_RAW) already exists; skipping."; \
-		fi
+img-download: $(CACHE_DIR) ## Download the image (.xz) into cache/
+	curl -fL --retry 3 -o "$(IMG_XZ).partial" "$(IMG_URL)"
+	mv -f "$(IMG_XZ).partial" "$(IMG_XZ)"
+	@echo "[img] downloaded: $(IMG_XZ)"
 
-sd-write: $(IMG_RAW)
+img-unpack: $(IMG_RAW) ## Decompress .xz into a raw .img (once)
+
+$(IMG_RAW): $(IMG_XZ)
+	@if [[ -f "$(IMG_RAW)" ]]; then \
+	  echo "[img] already exists: $(IMG_RAW)"; \
+	else \
+	  echo "[img] decompressing: $(IMG_XZ) -> $(IMG_RAW)"; \
+	  xz -dc "$(IMG_XZ)" > "$(IMG_RAW).partial"; \
+	  mv -f "$(IMG_RAW).partial" "$(IMG_RAW)"; \
+	  sync; \
+	fi
+
+# ---------- Write SD (DESTRUCTIVE) ----------
+sd-write: ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFIRM=yes
 	@if [[ -z "$(DEVICE)" ]]; then echo "ERROR: set DEVICE=/dev/sdX (or /dev/mmcblk0)"; exit 1; fi
 	@if [[ "$(CONFIRM)" != "yes" ]]; then echo "ERROR: set CONFIRM=yes to proceed (DESTRUCTIVE)"; exit 1; fi
-	@if [[ ! -b "$(DEVICE)" ]]; then echo "ERROR: $(DEVICE) is not a block device"; exit 1; fi
-	@echo "About to write $(IMG_RAW) -> $(DEVICE) (this will erase the device)"
-	@echo "Writing..."
-	@sudo dd if="$(IMG_RAW)" of="$(DEVICE)" bs=4M status=progress conv=fsync
-	@echo "Syncing..."; sync
-	@echo "Done writing image to $(DEVICE)."
-	@echo "Tip: re-plug the SD card so partitions are re-read before seeding."
+	@if [[ ! -b "$(DEVICE)" ]]; then echo "ERROR: DEVICE is not a block device: $(DEVICE)"; exit 1; fi
+	@if [[ ! -f "$(IMG_RAW)" ]]; then $(MAKE) img-unpack; fi
+	@echo "[dd] writing $(IMG_RAW) -> $(DEVICE)"
+	sudo umount $(DEVICE)* 2>/dev/null || true
+	sudo dd if="$(IMG_RAW)" of="$(DEVICE)" bs=4M status=progress conv=fsync
+	sync
+	@echo "[dd] done"
 
-flash-all: img-download img-unpack sd-write
-	@echo "flash-all start"
-
-tag:
-	@if [[ -z "$(VERSION)" ]]; then echo "ERROR: set VERSION=vX.Y.Z"; exit 1; fi
-	@git tag -a $(VERSION) -m "$(VERSION)"
-	@echo "Created tag $(VERSION)"
-
-version-bump:
-	@if [[ -z "$(VERSION)" ]]; then echo "ERROR: set VERSION=vX.Y.Z"; exit 1; fi
-	@echo "$(VERSION:v%=%)" > VERSION
-	@git add VERSION
-	@git commit -m "Bump version to $(VERSION)"
-	@echo "Version bumped to $(VERSION)"
-
-.PHONY: seed-layer1-auto
-seed-layer1-auto:
+# ---------- Seeding ----------
+seed-layer1: ## Auto-mount, seed, unmount (WIFI_SSID=.. WIFI_PASS=.. optional)
 	./tools/seed-layer1-auto.sh
 
-.PHONY: seed-layer1
-
-.PHONY: seed-layer1
-seed-layer1: seed-layer1-auto
-	@true
-
-
-.PHONY: help
-help:
-	@echo 'Targets:'
-	@echo '  show-config                         - Show important variables'
-	@echo '  img-download [IMG_URL=...]          - Download the image (.xz) into cache/'
-	@echo '  img-unpack                          - Decompress .xz into a raw .img (once)'
-	@echo '  sd-write DEVICE=/dev/sdX CONFIRM=yes- Write raw image to SD (DESTRUCTIVE)'
-	@echo '  seed-layer1                         - Auto-mount, seed, unmount (WIFI_SSID=.. WIFI_PASS=.. optional)'
-	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
-	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
-	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
-
-install-first-boot-unit:  ## Mount ROOT/BOOT and install + enable first-boot.service
-	./tools/install-first-boot-unit.sh
-
-seed-first-boot-service:  ## Seed first-boot systemd service into ROOT and enable (runs once on first boot)
+seed-first-boot-service: ## Seed first-boot systemd service into ROOT and enable (runs once on first boot)
 	./tools/seed-first-boot-service.sh
 
-.PHONY: seed-first-boot-service
+# Back-compat alias (for now)
+install-first-boot-unit: ## (deprecated) use 'seed-first-boot-service'
+	@echo "[note] 'install-first-boot-unit' is deprecated; use 'seed-first-boot-service'"
+	$(MAKE) seed-first-boot-service
 
-# Auto-discovered help (shows any "target:  ## description")
-help:
-	@echo "Targets:"
-	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | sed -E 's/^([a-zA-Z0-9_.-]+):.*## (.*)$$/  \1 - \2/'
+# ---------- One-shot convenience ----------
+flash-all: ## img-download + img-unpack + sd-write (requires DEVICE=/dev/sdX CONFIRM=yes)
+	$(MAKE) img-download
+	$(MAKE) img-unpack
+	$(MAKE) sd-write
 
-.PHONY: help seed-first-boot-service
+# ---------- Versioning ----------
+tag: ## Create annotated git tag — pass VERSION=vX.Y.Z
+	@if [[ -z "$(VERSION)" ]]; then echo "usage: make tag VERSION=vX.Y.Z"; exit 1; fi
+	git tag -a "$(VERSION)" -m "$(VERSION)"
+	@echo "tagged: $(VERSION)"
+
+version-bump: ## Write VERSION file + commit — pass VERSION=vX.Y.Z
+	@if [[ -z "$(VERSION)" ]]; then echo "usage: make version-bump VERSION=vX.Y.Z"; exit 1; fi
+	printf '%s\n' "$(VERSION)" > VERSION
+	git add VERSION
+	git commit -m "$(VERSION): bump VERSION file"
+
+.PHONY: help show-config img-download img-unpack sd-write seed-layer1 seed-first-boot-service install-first-boot-unit flash-all tag version-bump
