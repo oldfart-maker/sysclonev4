@@ -1,0 +1,9 @@
+# /etc/greetd/config.toml
+[terminal]
+vt = 1
+
+[default_session]
+# No --cmd and no --remember-user per our policy for 2.5
+# User will pick Sway (or later: Niri) from the menu
+command = "tuigreet --time"
+user = "greeter"

@@ -1,0 +1,13 @@
+[Unit]
+Description=SysClone Layer 2.5 On-Boot Installer (greetd + tuigreet)
+Wants=network-online.target first-boot.service sysclone-first-boot.service
+After=network-online.target sysclone-layer2-install.service first-boot.service sysclone-first-boot.service
+ConditionPathExists=!/var/lib/sysclone/.layer2.5-greetd-installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sysclone-layer2.5-greetd-install.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -116,14 +116,14 @@ tidy:  ## Remove local backup files (.bak.*) from tools/ and seeds/
 # Add only when you want a DM on boot instead of TTY 'start-sway'.
 
 seed-layer2-wayland: ## Wayland/wlroots core + pipewire stack + portal
-	ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer2-wayland.sh
+	ROOT_MNT="$(ROOT_MNT)" bash seeds/layer2/seed-wayland.sh
 
 seed-layer2-sway: ## Sway + minimal config + start-sway wrapper
-	ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer2-sway.sh
+	ROOT_MNT="$(ROOT_MNT)" bash seeds/layer2/seed-sway.sh
 
 seed-layer2-all: seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM)
 
 seed-layer2.5-greetd: ## (Optional) greetd + tuigreet (login screen)
-	ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer2.5-greetd.sh
+	ROOT_MNT="$(ROOT_MNT)" bash seeds/layer2.5/seed-greetd.sh
 
 # ---------------- End Layer 2 block ----------------
