@@ -7,3 +7,6 @@ cache/
 *.bak
 *.orig
 .~undo-tree*
+sysclone.local.mk
+tools/*.bak*
+seeds/**/*.bak.*
