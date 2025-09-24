@@ -88,3 +88,6 @@ help:
 	@echo '  flash-all DEVICE=... CONFIRM=yes    - img-download + img-unpack + sd-write'
 	@echo '  tag VERSION=vX.Y.Z                  - Create annotated git tag'
 	@echo '  version-bump VERSION=vX.Y.Z         - Write VERSION file + commit'
+
+install-first-boot-unit:  ## Mount ROOT/BOOT and install + enable first-boot.service
+	./tools/install-first-boot-unit.sh

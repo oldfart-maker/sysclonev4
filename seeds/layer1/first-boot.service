@@ -1,0 +1,13 @@
+[Unit]
+Description=Sysclone First Boot Provisioning
+DefaultDependencies=no
+After=basic.target
+ConditionPathExists=!/var/lib/sysclone/first-boot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/sysclone/first-boot-provision.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
