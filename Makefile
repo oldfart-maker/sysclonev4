@@ -8,6 +8,12 @@ SHELL := /bin/bash
 IMG_URL    ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
 CACHE_DIR  ?= cache
 
+# ----- Partition labels (distro defaults; override only if image changes) -----
+BOOT_LABEL ?= BOOT_MNJRO
+ROOT_LABEL ?= ROOT_MNJRO
+export BOOT_LABEL
+export ROOT_LABEL
+
 # ----- Wi-Fi (edit once here; inherited by seeding scripts) -----
 WIFI_SSID  ?=
 WIFI_PASS  ?=
@@ -33,9 +39,10 @@ show-config:  ## Show important variables
 	@echo "IMG_RAW    = $(IMG_RAW)"
 	@echo "DEVICE     = $(DEVICE)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
+	@echo "BOOT_LABEL = $(BOOT_LABEL)"
+	@echo "ROOT_LABEL = $(ROOT_LABEL)"
 	@echo "WIFI_SSID  = $(WIFI_SSID)"
 	@echo "WIFI_PASS  = $(if $(strip $(WIFI_PASS)),(set),(unset))"
-
 # -------- Image workflow --------
 img-download:  ## Download the image (.xz) into cache/
 	@mkdir -p $(CACHE_DIR)
