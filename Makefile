@@ -93,3 +93,6 @@ version-bump: ## Write VERSION file + commit — pass VERSION=vX.Y.Z
 	git commit -m "$(VERSION): bump VERSION file"
 
 .PHONY: help show-config img-download img-unpack sd-write seed-layer1 seed-first-boot-service install-first-boot-unit flash-all tag version-bump
+
+seed-disable-firstboot:  ## Mask Manjaro first-boot wizard and preseed basics (hostname/locale/keymap/tz/user)
+	./tools/seed-disable-firstboot.sh

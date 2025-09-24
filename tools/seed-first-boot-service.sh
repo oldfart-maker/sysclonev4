@@ -1,3 +1,4 @@
+# Note: run seed-disable-firstboot beforehand if you want to suppress Manjaro wizard
 #!/usr/bin/env bash
 set -Eeuo pipefail
 BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
