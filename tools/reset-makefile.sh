@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+cat > Makefile <<'MAKE'
 # sysclonev4 — Makefile (v0.1.3 clean reset)
 SHELL := /bin/bash
 .ONESHELL:
@@ -84,3 +88,5 @@ version-bump:  ## Write VERSION file + commit: make version-bump VERSION=vX.Y.Z
 .PHONY: help show-config img-download img-unpack sd-write flash-all \
         seed-layer1 seed-first-boot-service seed-disable-firstboot \
         tag version-bump
+MAKE
+echo "[reset] Makefile written."
