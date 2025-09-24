@@ -96,3 +96,9 @@ seed-all:  ## Disable firstboot, seed layer1, install oneshot (by-label if ROOT_
 	./tools/seed-first-boot-service.sh
 
 .PHONY: seed-all
+
+tidy:  ## Remove local backup files (.bak.*) from tools/ and seeds/
+	@rm -f tools/*.bak* 2>/dev/null || true
+	@find seeds -type f -name '*.bak.*' -delete 2>/dev/null || true
+	@echo "[tidy] done"
+.PHONY: tidy
