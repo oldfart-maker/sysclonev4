@@ -1,5 +1,5 @@
 # sysclonev4 — Makefile (v0.0.37)
-SHELL := /usr/bin/env bash
+SHELL := /bin/bash
 .ONESHELL:
 .DELETE_ON_ERROR:
 .SUFFIXES:
