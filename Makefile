@@ -23,11 +23,8 @@ CONFIRM    ?=
 
 # -------- Help --------
 # List any "target: ## description" (auto-discovered)
-help:  ## Show available targets
-	@echo "Targets:"
-	@grep -E '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | \
-	  sed -E 's/^([a-zA-Z0-9_.-]+):.*## (.*)/  \1\t- \2/' | sort
-
+help:  ## Show available targets + param hints (use: make help TARGET=name)
+	@python3 tools/mkhelp.py $(firstword $(MAKEFILE_LIST)) "$(TARGET)"
 # -------- Introspection --------
 show-config:  ## Show important variables
 	@echo "IMG_URL    = $(IMG_URL)"
