@@ -84,3 +84,11 @@ version-bump:  ## Write VERSION file + commit: make version-bump VERSION=vX.Y.Z
 .PHONY: help show-config img-download img-unpack sd-write flash-all \
         seed-layer1 seed-first-boot-service seed-disable-firstboot \
         tag version-bump
+
+# -------- Convenience --------
+seed-all:  ## Disable firstboot, seed layer1, install oneshot (by-label if ROOT_PART/BOOT_PART exported)
+	./tools/seed-disable-firstboot.sh
+	./tools/seed-layer1-auto.sh
+	./tools/seed-first-boot-service.sh
+
+.PHONY: seed-all
