@@ -14,3 +14,5 @@ cache/
 *.~undo-tree~
 *.bak.*
 Makefile.new
+tools/*.bak*
+*.~undo-tree~
