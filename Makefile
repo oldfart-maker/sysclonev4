@@ -6,6 +6,12 @@ SHELL := /bin/bash
 
 # ---------- Config ----------
 IMG_URL    ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
+
+# ----- Wi-Fi (edit once here; inherited by seeding scripts) -----
+WIFI_SSID ?=
+WIFI_PASS ?=
+export WIFI_SSID
+export WIFI_PASS
 CACHE_DIR  ?= cache
 IMG_XZ     := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW    := $(IMG_XZ:.img.xz=.img)
@@ -28,6 +34,13 @@ show-config: ## Show important variables
 	@echo "DEVICE     = $(DEVICE)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "CONFIRM    = $(CONFIRM)"
+	@echo "WIFI_SSID = $(WIFI_SSID)"
+	@echo "WIFI_PASS = $$(python3 - <<'EOS'
+import os
+pw=os.getenv("WIFI_PASS","")
+print("*"*len(pw) if pw else "")
+EOS
+)"
 
 # ---------- Image prep ----------
 $(CACHE_DIR):
@@ -63,7 +76,7 @@ sd-write: ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFIR
 	@echo "[dd] done"
 
 # ---------- Seeding ----------
-seed-layer1: ## Auto-mount, seed, unmount (WIFI_SSID=.. WIFI_PASS=.. optional)
+seed-layer1: ## Auto-mount, seed, unmount
 	./tools/seed-layer1-auto.sh
 
 seed-first-boot-service: ## Seed first-boot systemd service into ROOT and enable (runs once on first boot)
