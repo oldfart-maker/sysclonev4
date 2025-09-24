@@ -1,0 +1,8 @@
+# /etc/greetd/config.toml
+[terminal]
+vt = 1
+
+[default_session]
+# Conservative: no --cmd, no --remember-user. The greeter picks session.
+command = "tuigreet --time"
+user = "greeter"

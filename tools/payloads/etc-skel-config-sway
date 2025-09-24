@@ -1,0 +1,8 @@
+# Minimal Sway config (go/no-go)
+set $mod Mod4
+bindsym $mod+Return exec foot
+bindsym $mod+d exec dmenu_path | dmenu | xargs swaymsg exec --
+exec_always swaybg -c "#222222"
+exec_always systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+# Idle/lock are present but disabled by default:
+# exec swayidle -w timeout 600 'swaylock -f -c 000000' before-sleep 'swaylock -f -c 000000'
