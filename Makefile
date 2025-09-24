@@ -115,15 +115,54 @@ tidy:  ## Remove local backup files (.bak.*) from tools/ and seeds/
 # Layer 2.5 (optional now): greetd + tuigreet (login screen)
 # Add only when you want a DM on boot instead of TTY 'start-sway'.
 
-seed-layer2-wayland: ## Wayland/wlroots core + pipewire stack + portal
+seed-layer2-wayland: ensure-mounted ## Wayland/wlroots core + pipewire stack + portal
 	bash seeds/layer2/seed-wayland.sh
 
-seed-layer2-sway: ## Sway + minimal config + start-sway wrapper
+seed-layer2-sway: ensure-mounted ## Sway + minimal config + start-sway wrapper
 	bash seeds/layer2/seed-sway.sh
 
 seed-layer2-all: seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM)
 
-seed-layer2.5-greetd: ## (Optional) greetd + tuigreet (login screen)
+seed-layer2.5-greetd: ensure-mounted ## (Optional) greetd + tuigreet (login screen)
 	bash seeds/layer2.5/seed-greetd.sh
 
 # ---------------- End Layer 2 block ----------------
+
+# ---------- Mount helpers for seeding (idempotent) ----------
+# Only define ROOT_MNT if not already set elsewhere in your Makefile
+ROOT_MNT ?= /mnt/sysclone-root
+
+.PHONY: ensure-mounted ensure-unmounted
+
+ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
+	@set -euo pipefail; \
+	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
+	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
+	if [ -z "$$ROOT_DEV" ]; then echo "[ensure-mounted] Missing ROOT_LABEL=$(ROOT_LABEL)" >&2; exit 1; fi; \
+	if [ -z "$$BOOT_DEV" ]; then echo "[ensure-mounted] Missing BOOT_LABEL=$(BOOT_LABEL)" >&2; exit 1; fi; \
+	sudo mkdir -p "$(ROOT_MNT)"; \
+	if ! findmnt -rn -S "$$ROOT_DEV" >/dev/null; then \
+	  echo "[ensure-mounted] mount $$ROOT_DEV -> $(ROOT_MNT)"; \
+	  sudo mount "$$ROOT_DEV" "$(ROOT_MNT)"; \
+	fi; \
+	sudo mkdir -p "$(ROOT_MNT)/boot"; \
+	if ! findmnt -rn -S "$$BOOT_DEV" >/dev/null; then \
+	  echo "[ensure-mounted] mount $$BOOT_DEV -> $(ROOT_MNT)/boot"; \
+	  sudo mount "$$BOOT_DEV" "$(ROOT_MNT)/boot"; \
+	fi; \
+	echo "[ensure-mounted] ROOT=$(ROOT_MNT) BOOT=$(ROOT_MNT)/boot ready"
+
+ensure-unmounted: ## Unmount ROOT/BOOT if mounted
+	@set -euo pipefail; \
+	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
+	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
+	if [ -n "$$BOOT_DEV" ] && findmnt -rn -S "$$BOOT_DEV" >/dev/null; then \
+	  echo "[ensure-unmounted] umount $(ROOT_MNT)/boot"; \
+	  sudo umount "$(ROOT_MNT)/boot"; \
+	fi; \
+	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/devnull; then \
+	  echo "[ensure-unmounted] umount $(ROOT_MNT)"; \
+	  sudo umount "$(ROOT_MNT)"; \
+	fi; \
+	echo "[ensure-unmounted] done"
+# ------------------------------------------------------------
