@@ -10,3 +10,7 @@ cache/
 sysclone.local.mk
 tools/*.bak*
 seeds/**/*.bak.*
+cache/
+*.~undo-tree~
+*.bak.*
+Makefile.new
