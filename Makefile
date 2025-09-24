@@ -8,8 +8,8 @@ SHELL := /bin/bash
 IMG_URL    ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
 
 # ----- Wi-Fi (edit once here; inherited by seeding scripts) -----
-WIFI_SSID ?=
-WIFI_PASS ?=
+WIFI_SSID ?= Hangout
+WIFI_PASS ?= gulfshores
 export WIFI_SSID
 export WIFI_PASS
 CACHE_DIR  ?= cache
@@ -26,16 +26,15 @@ help: ## Show available targets (auto-discovered)
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | sed -E 's/^([a-zA-Z0-9_.-]+):.*## (.*)$$/  \1 - \2/'
 
 # ---------- Utility ----------
-show-config: ## Show important variables
+show-config:  ## Show important variables
 	@echo "IMG_URL    = $(IMG_URL)"
 	@echo "CACHE_DIR  = $(CACHE_DIR)"
 	@echo "IMG_XZ     = $(IMG_XZ)"
 	@echo "IMG_RAW    = $(IMG_RAW)"
 	@echo "DEVICE     = $(DEVICE)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
-	@echo "CONFIRM    = $(CONFIRM)"
-	@echo "WIFI_SSID = $(WIFI_SSID)"
-	@echo "WIFI_PASS = $$(python3 - <<'EOS'
+	@echo "WIFI_SSID  = $(WIFI_SSID)"
+	@echo "WIFI_PASS  = $(if $(strip $(WIFI_PASS)),(set),(unset))"
 import os
 pw=os.getenv("WIFI_PASS","")
 print("*"*len(pw) if pw else "")
