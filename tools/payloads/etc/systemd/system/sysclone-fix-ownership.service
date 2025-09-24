@@ -1,0 +1,13 @@
+[Unit]
+Description=SysClone: fix ownership of user config once
+After=network-online.target first-boot.service sysclone-first-boot.service
+ConditionPathExists=/home/username/.config
+ConditionPathExists=!/var/lib/sysclone/.fix-ownership-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sysclone-fix-ownership.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
