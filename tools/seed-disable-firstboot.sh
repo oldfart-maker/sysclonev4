@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+log(){ [[ "${QUIET:-0}" = "1" ]] || echo "$@"; }
 set -Eeuo pipefail
 
 BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
@@ -32,7 +33,7 @@ mask_unit() {
   if [[ -f "$ROOT_MOUNT/usr/lib/systemd/system/$name" || -f "$ROOT_MOUNT/etc/systemd/system/$name" ]]; then
     echo "[seed] masking $name"
     sudo install -d "$ROOT_MOUNT/etc/systemd/system"
-    sudo ln -snf /dev/null "$ROOT_MOUNT/etc/systemd/system/$name"
+    if [[ ! -L "$ROOT_MOUNT/etc/systemd/system/$name" ]] || [[ "$(readlink -f "$ROOT_MOUNT/etc/systemd/system/$name")" != "/dev/null" ]]; then log "[seed] masking $name"; sudo ln -snf /dev/null "$ROOT_MOUNT/etc/systemd/system/$name"; fi
     sudo rm -f "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/$name" || true
     sudo rm -f "$ROOT_MOUNT/etc/systemd/system/default.target.wants/$name" || true
   fi

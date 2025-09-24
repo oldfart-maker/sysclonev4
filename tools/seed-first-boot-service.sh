@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+log(){ [[ "${QUIET:-0}" = "1" ]] || echo "$@"; }
 set -Eeuo pipefail
 
 BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
