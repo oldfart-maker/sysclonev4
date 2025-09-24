@@ -91,3 +91,6 @@ help:
 
 install-first-boot-unit:  ## Mount ROOT/BOOT and install + enable first-boot.service
 	./tools/install-first-boot-unit.sh
+
+seed-first-boot-service:  ## Seed first-boot systemd service into ROOT and enable (runs once on first boot)
+	./tools/seed-first-boot-service.sh
