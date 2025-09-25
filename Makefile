@@ -175,3 +175,17 @@ clear-layer-stamps: ## Clear one-shot stamps for Layer 2/2.5
 	sudo mkdir -p "$$STAMP_DIR"; \
 	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
 	          "$$STAMP_DIR/.layer2.5-greetd-installed" \
+
+.PHONY: zap-layer-stamps
+zap-layer-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
+	@set -e; \
+	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
+	sudo mkdir -p "$$STAMP_DIR"; \
+	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
+	           "$$STAMP_DIR/.layer2.5-greetd-installed" \
+	           "$$STAMP_DIR/.fix-ownership-done" || true; \
+	echo "[zap-layer-stamps] removed any stamps under $$STAMP_DIR"
+
+.PHONY: seed-layer2-all-fresh
+seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
+	@true
