@@ -152,10 +152,6 @@ ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
 	fi; \
 	echo "[ensure-mounted] ROOT=$(ROOT_MNT) BOOT=$(ROOT_MNT)/boot ready"
 
-ensure-unmounted: ## Unmount ROOT/BOOT if mounted
-.PHONY: ensure-unmounted clear-layer-stamps seed-layer2-all seed-layer2.5-greetd-all ensure-mount
-
-# Robust unmount (idempotent, synced)
 ensure-unmounted: ## Unmount ROOT/BOOT if mounted (with sync, idempotent)
 	@set -euo pipefail; \
 	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
