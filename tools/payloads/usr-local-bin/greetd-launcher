@@ -2,27 +2,18 @@
 set -eu
 
 CMD="/usr/local/bin/start-sway"
-
-# Minimal environment so sway/Wayland don’t choke
 [ -n "${XDG_SESSION_TYPE:-}" ] || export XDG_SESSION_TYPE=wayland
 [ -n "${XDG_CURRENT_DESKTOP:-}" ] || export XDG_CURRENT_DESKTOP=sway
 
-# Log somewhere greeter can write
-LOG="/tmp/greetd-greeter.err"
-exec 2>>"$LOG"
+# Flags confirmed by `tuigreet --help` on your Pi
+FLAGS="--time --issue --user-menu --remember --asterisks"
+SESS="/usr/share/wayland-sessions:/usr/local/share/wayland-sessions"
 
 if command -v tuigreet >/dev/null 2>&1; then
-  HELP="$(tuigreet --help 2>&1 || true)"
-  FLAGS=""
-  has() { printf '%s\n' "$HELP" | grep -q -- "$1"; }
-  has '--time'            && FLAGS="$FLAGS --time"
-  has '--remember-user'   && FLAGS="$FLAGS --remember-user"
-  ! has '--remember-user' && has '--remember' && FLAGS="$FLAGS --remember"
-  has '--user-menu'       && FLAGS="$FLAGS --user-menu"
-  has '--asterisks'       && FLAGS="$FLAGS --asterisks"
-  exec tuigreet $FLAGS --cmd "$CMD"
+  exec /usr/bin/tuigreet $FLAGS --sessions "$SESS" --cmd "$CMD"
 elif command -v agreety >/dev/null 2>&1; then
-  exec agreety --cmd "$CMD"
+  exec /usr/bin/agreety --cmd "$CMD"
 else
+  echo "No greeter found (tuigreet/agreety). Falling back to /bin/login." >&2
   exec /bin/login -p
 fi
