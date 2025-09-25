@@ -3,9 +3,9 @@ set -euo pipefail
 
 log(){ echo "[layer2-install] $*"; }
 
-# --- brief wait for sane clock (TLS) ---
+# --- brief wait for sane clock (TLS); never infinite ---
 log "waiting briefly for time sync…"
-deadline=$((SECONDS+90))
+deadline=$((SECONDS+120))
 while :; do
   synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)
   now=$(date +%s)
@@ -18,18 +18,19 @@ done
 log "pacman -Syy (refresh db)"
 pacman -Syy --noconfirm || true
 
-# Remove packages that cause/trigger the hybris conflict if present (ignore errors)
+# --- ruthlessly remove troublemakers if present (ignore failures) ---
 TO_REMOVE=(ocl-icd libhybris libhybris-28-glvnd libhybris-glvnd libhybris-git)
-log "pre-clean: ${TO_REMOVE[*]}"
-pacman -R --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
-pacman -Rn --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
+log "pre-clean (force) any: ${TO_REMOVE[*]}"
+pacman -Rdd --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
+pacman -Rnsc --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
 
-# Install providers FIRST to avoid prompts
-PROVIDERS=(mesa ffmpeg pipewire-jack ttf-dejavu)
+# --- install providers FIRST so pacman never prompts later ---
+# include libglvnd explicitly so GL deps are satisfied w/o hybris
+PROVIDERS=(mesa libglvnd ffmpeg pipewire-jack ttf-dejavu)
 log "install providers first: ${PROVIDERS[*]}"
 pacman -S --needed --noconfirm --overwrite='*' "${PROVIDERS[@]}"
 
-# Base Wayland/Sway packages
+# --- base Wayland/Sway packages ---
 BASE_PKGS=(
   wayland wlroots
   foot grim slurp kanshi wf-recorder
@@ -38,16 +39,15 @@ BASE_PKGS=(
   sway swaybg swayidle swaylock dmenu
 )
 
-# Some Manjaro ARM dep chains try to pull 'libhybris' as a provider.
-# We *do not* want libhybris on Pi; satisfy it virtually so pacman never prompts.
-ASSUME=(--assume-installed libhybris=0)
+# Some Manjaro ARM chains try to pull a hybris provider; we reject them all.
+ASSUME=(--assume-installed libhybris=0 --assume-installed libhybris-28-glvnd=0 --assume-installed libhybris-glvnd=0 --assume-installed libhybris-git=0)
 
 log "install Wayland/Sway stack (non-interactive; no hybris)"
 set -x
 pacman -S --needed --noconfirm --overwrite='*' "${ASSUME[@]}" "${BASE_PKGS[@]}"
 set +x
 
-# Enable audio/session services for all users (safe to repeat)
+# enable audio/session services for all users (safe if already enabled)
 systemctl --global enable pipewire.service pipewire-pulse.service wireplumber.service || true
 
 install -d -m 0755 /var/lib/sysclone
