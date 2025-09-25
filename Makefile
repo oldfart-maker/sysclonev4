@@ -123,8 +123,6 @@ seed-layer2-sway: ensure-mounted ## Sway + minimal config + start-sway wrapper
 
 seed-layer2-all: seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM)
 
-seed-layer2.5-greetd: ensure-mounted ## (Optional) greetd + tuigreet (login screen)
-	bash seeds/layer2.5/seed-greetd.sh
 
 # ---------------- End Layer 2 block ----------------
 
@@ -189,3 +187,6 @@ zap-layer-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
 .PHONY: seed-layer2-all-fresh
 seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
 	@true
+seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety) login screen
+	ROOT_MNT="$(ROOT_MNT)" bash seeds/layer2.5/seed-greetd.sh
+
