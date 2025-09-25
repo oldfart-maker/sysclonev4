@@ -3,6 +3,6 @@ vt = 1
 switch = true
 
 [default_session]
-# Wrapper prefers tuigreet, falls back to agreety
+# always call the wrapper; it will pick tuigreet/agreety safely
 command = "/usr/local/bin/greetd-launcher"
 user = "greeter"
