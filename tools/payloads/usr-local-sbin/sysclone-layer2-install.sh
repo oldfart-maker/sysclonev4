@@ -3,32 +3,35 @@ set -euo pipefail
 
 log(){ echo "[layer2-install] $*"; }
 
-# --- Short wait for time sync; never infinite ---
+# --- brief wait for sane clock (TLS) ---
 log "waiting briefly for time sync…"
 deadline=$((SECONDS+90))
 while :; do
   synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)
   now=$(date +%s)
-  # treat >= 2024-01-01 as "sane"
-  if [ "$synced" = "yes" ] || [ "$now" -ge 1704067200 ]; then
-    break
-  fi
+  [ "$synced" = "yes" ] && break
+  [ "$now" -ge 1704067200 ] && break  # >= 2024-01-01
   sleep 3
   [ $SECONDS -gt $deadline ] && break
 done
 
-# Be explicit: we do *not* want libhybris on the Pi
-REMOVE_CONFLICTS=(libhybris libhybris-28-glvnd libhybris-git libhybris-glvnd ocl-icd)
-
-# Update dbs; tolerate mirror hiccups
-log "pacman -Syy"
+log "pacman -Syy (refresh db)"
 pacman -Syy --noconfirm || true
 
-# Remove known conflicting providers if present (ignore if not installed)
-log "removing conflicting providers if present: ${REMOVE_CONFLICTS[*]}"
-pacman -R --noconfirm "${REMOVE_CONFLICTS[@]}" 2>/dev/null || true
+# --- remove known troublemakers if present (ignore errors) ---
+TO_REMOVE=(ocl-icd libhybris libhybris-28-glvnd libhybris-glvnd libhybris-git)
+log "pre-clean: ${TO_REMOVE[*]}"
+pacman -R --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
+pacman -Rn --noconfirm "${TO_REMOVE[@]}" 2>/dev/null || true
 
-# Install base + explicit providers; no prompts.
+# --- install providers FIRST so pacman never prompts later ---
+PROVIDERS=(mesa ffmpeg pipewire-jack ttf-dejavu)
+log "install providers first: ${PROVIDERS[*]}"
+set -x
+pacman -S --needed --noconfirm --overwrite='*' "${PROVIDERS[@]}"
+set +x
+
+# --- now install the rest of the stack (no prompts expected) ---
 BASE_PKGS=(
   wayland wlroots
   foot grim slurp kanshi wf-recorder
@@ -36,14 +39,12 @@ BASE_PKGS=(
   pipewire wireplumber pipewire-alsa pipewire-pulse
   sway swaybg swayidle swaylock dmenu
 )
-PROVIDERS=( mesa ffmpeg pipewire-jack ttf-dejavu )
-
-log "installing Wayland/Sway stack (non-interactive; pinned providers)"
+log "install Wayland/Sway stack"
 set -x
-pacman -S --needed --noconfirm --overwrite='*' "${BASE_PKGS[@]}" "${PROVIDERS[@]}"
+pacman -S --needed --noconfirm --overwrite='*' "${BASE_PKGS[@]}"
 set +x
 
-# Enable audio for all users (safe to repeat)
+# enable audio/session services for all users (safe if already enabled)
 systemctl --global enable pipewire.service pipewire-pulse.service wireplumber.service || true
 
 install -d -m 0755 /var/lib/sysclone
