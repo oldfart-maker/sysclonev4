@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[layer2-install] gating on time sync…"
+log(){ echo "[layer2-install] $*"; }
+
+# --- Short wait for time sync; never infinite ---
+log "waiting briefly for time sync…"
 deadline=$((SECONDS+90))
 while :; do
   synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)
   now=$(date +%s)
-  # treat >= 2024-01-01 as sane if NTPSynchronized lags
+  # treat >= 2024-01-01 as "sane"
   if [ "$synced" = "yes" ] || [ "$now" -ge 1704067200 ]; then
     break
   fi
@@ -14,10 +17,18 @@ while :; do
   [ $SECONDS -gt $deadline ] && break
 done
 
-echo "[layer2-install] pacman -Syu (refresh/upgrade)"
-pacman -Syu --noconfirm || true
+# Be explicit: we do *not* want libhybris on the Pi
+REMOVE_CONFLICTS=(libhybris libhybris-28-glvnd libhybris-git libhybris-glvnd ocl-icd)
 
-echo "[layer2-install] installing Wayland/Sway stack (non-interactive, pinned providers)"
+# Update dbs; tolerate mirror hiccups
+log "pacman -Syy"
+pacman -Syy --noconfirm || true
+
+# Remove known conflicting providers if present (ignore if not installed)
+log "removing conflicting providers if present: ${REMOVE_CONFLICTS[*]}"
+pacman -R --noconfirm "${REMOVE_CONFLICTS[@]}" 2>/dev/null || true
+
+# Install base + explicit providers; no prompts.
 BASE_PKGS=(
   wayland wlroots
   foot grim slurp kanshi wf-recorder
@@ -25,14 +36,16 @@ BASE_PKGS=(
   pipewire wireplumber pipewire-alsa pipewire-pulse
   sway swaybg swayidle swaylock dmenu
 )
-# Providers to avoid interactive prompts and libhybris conflicts:
 PROVIDERS=( mesa ffmpeg pipewire-jack ttf-dejavu )
 
-pacman -S --needed --noconfirm "${BASE_PKGS[@]}" "${PROVIDERS[@]}" --overwrite='*'
+log "installing Wayland/Sway stack (non-interactive; pinned providers)"
+set -x
+pacman -S --needed --noconfirm --overwrite='*' "${BASE_PKGS[@]}" "${PROVIDERS[@]}"
+set +x
 
-# enable audio pieces for all users (safe if already enabled)
+# Enable audio for all users (safe to repeat)
 systemctl --global enable pipewire.service pipewire-pulse.service wireplumber.service || true
 
 install -d -m 0755 /var/lib/sysclone
 touch /var/lib/sysclone/.layer2-installed
-echo "[layer2-install] done"
+log "done"

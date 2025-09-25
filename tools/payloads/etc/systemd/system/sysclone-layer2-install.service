@@ -1,13 +1,15 @@
 [Unit]
 Description=SysClone Layer 2 On-Boot Installer (Wayland + Sway)
-Wants=network-online.target first-boot.service sysclone-first-boot.service
-After=network-online.target first-boot.service sysclone-first-boot.service
+Wants=network-online.target time-sync.target first-boot.service sysclone-first-boot.service
+After=network-online.target time-sync.target first-boot.service sysclone-first-boot.service
 ConditionPathExists=!/var/lib/sysclone/.layer2-installed
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/sysclone-layer2-install.sh
 RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
