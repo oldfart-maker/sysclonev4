@@ -2,7 +2,10 @@
 set -euo pipefail
 export XDG_CURRENT_DESKTOP=sway
 export XDG_SESSION_TYPE=wayland
-# PipeWire/WirePlumber on user session (in case system units aren’t up yet)
+# Try to bring up PipeWire/WirePlumber in user session (harmless if already active)
 systemctl --user daemon-reload || true
 systemctl --user enable --now pipewire.service pipewire-pulse.service wireplumber.service || true
 exec sway
+export XDG_CURRENT_DESKTOP=
+export XDG_SESSION_TYPE=
+export WAYLAND_DISPLAY=-e

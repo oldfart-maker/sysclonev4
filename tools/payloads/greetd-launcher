@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+# If tuigreet is present, present a session menu (Wayland + X11 sessions).
+if command -v tuigreet >/dev/null 2>&1; then
+  exec tuigreet \
+    --time \
+    --remember --remember-user --remember-session \
+    --greeting "sysclone login" \
+    --sessions /usr/share/wayland-sessions:/usr/share/xsessions
+fi
+
+# Fallback: no tui greeter? Just start sway so the box still boots to a desktop.
+exec /usr/local/bin/start-sway

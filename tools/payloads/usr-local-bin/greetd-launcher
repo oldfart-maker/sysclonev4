@@ -1,22 +1,29 @@
 #!/bin/sh
-log=/tmp/greetd-greeter.err
-exec >>"$log" 2>&1
-echo "=== launcher start $(date) uid=$(id -u) gid=$(id -g) ==="
-set -ux
+set -eu
 CMD="/usr/local/bin/start-sway"
-[ -n "${XDG_SESSION_TYPE:-}" ]    || export XDG_SESSION_TYPE=wayland
+
+[ -n "${XDG_SESSION_TYPE:-}" ] || export XDG_SESSION_TYPE=wayland
 [ -n "${XDG_CURRENT_DESKTOP:-}" ] || export XDG_CURRENT_DESKTOP=sway
-have() { command -v "$1" >/dev/null 2>&1; }
-if have tuigreet; then
-  HELP="$(tuigreet --help 2>&1 || true)"; FLAGS=""
-  printf '%s' "$HELP" | grep -q -- '--time'      && FLAGS="$FLAGS --time"
-  printf '%s' "$HELP" | grep -q -- '--user-menu' && FLAGS="$FLAGS --user-menu"
-  echo "[launcher] exec: tuigreet $FLAGS --cmd $CMD"
-  exec tuigreet $FLAGS --cmd "$CMD"
-elif have agreety; then
-  echo "[launcher] exec: agreety --cmd $CMD"
-  exec agreety --cmd "$CMD"
+
+LOG="/tmp/greetd-greeter.err"
+touch "$LOG" 2>/dev/null || LOG="/dev/null"
+
+if command -v tuigreet >/dev/null 2>&1; then
+  HELP="$(tuigreet --help 2>&1 || true)"
+  has() { printf '%s\n' "$HELP" | grep -q -- "$1"; }
+  FLAGS=""
+  has '--time'          && FLAGS="$FLAGS --time"
+  if has '--remember-user'; then
+    FLAGS="$FLAGS --remember-user"
+  elif has '--remember'; then
+    FLAGS="$FLAGS --remember"
+  fi
+  has '--user-menu'     && FLAGS="$FLAGS --user-menu"
+  has '--asterisks'     && FLAGS="$FLAGS --asterisks"
+  exec tuigreet $FLAGS --cmd "$CMD" 2>>"$LOG"
+elif command -v agreety >/dev/null 2>&1; then
+  exec agreety --cmd "$CMD" 2>>"$LOG"
 else
-  echo "[launcher] no greeter found; exec /bin/login -p"
-  exec /bin/login -p
+  echo "No greeter found (tuigreet/agreety). Falling back to login." >&2
+  exec /bin/login -p 2>>"$LOG"
 fi

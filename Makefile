@@ -187,6 +187,9 @@ zap-layer-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
 .PHONY: seed-layer2-all-fresh
 seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
 	@true
-seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety) login screen
+seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
 	sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/layer2.5/seed-greetd.sh
+	# ensure greetd owns tty1 at boot
+	sudo install -D -m 0644 tools/payloads/etc-systemd-system-greetd.service.d-tty.conf \
+		"$(ROOT_MNT)/etc/systemd/system/greetd.service.d/tty.conf"
 
