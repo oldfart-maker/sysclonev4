@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+# Prefer tuigreet (session chooser). If missing, just start sway.
+if command -v tuigreet >/dev/null 2>&1; then
+  exec tuigreet \
+    --time \
+    --remember --remember-user --remember-session \
+    --greeting "sysclone login" \
+    --sessions /usr/share/wayland-sessions:/usr/share/xsessions \
+    --cmd /usr/local/bin/start-sway
+fi
+exec /usr/local/bin/start-sway
