@@ -1,38 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ROOT="${ROOT_MNT:?ROOT_MNT not set}"
 
-SUDO=""
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  SUDO="sudo"
+echo "[seed] layer2.5: greetd (agreety) + config"
+
+# stage an on-boot installer OR directly copy (no chroot on host)
+install -D -m0644 tools/payloads/etc-greetd-config.toml \
+  "$ROOT/etc/greetd/config.toml"
+
+# ensure greetd is enabled on target; if we can't chroot here, stage a oneshot
+if command -v arch-chroot >/dev/null 2>&1; then
+  sudo arch-chroot "$ROOT" bash -ec '
+    set -euo pipefail
+    pacman -Sy --noconfirm greetd
+    systemctl enable greetd.service
+  '
+else
+  # on-boot oneshot to install/enable greetd on the Pi
+  install -D -m0755 /dev/stdin "$ROOT/usr/local/sbin/sysclone-layer2.5-greetd-install.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+LOG=/var/log/sysclone-layer2.5.log
+exec > >(tee -a "$LOG") 2>&1
+echo "[layer2.5-install] install greetd (agreety)"
+pacman -Syy --noconfirm greetd || true
+systemctl enable greetd.service || true
+install -d -m0755 /var/lib/sysclone
+: > /var/lib/sysclone/.layer2.5-greetd-installed
+echo "[layer2.5-install] done"
+SCRIPT
+
+  install -D -m0644 /dev/stdin "$ROOT/etc/systemd/system/sysclone-layer2.5-greetd-install.service" <<'UNIT'
+[Unit]
+Description=SysClone Layer 2.5 On-Boot Installer (greetd/agreety)
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target
+ConditionPathExists=!/var/lib/sysclone/.layer2.5-greetd-installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sysclone-layer2.5-greetd-install.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  ln -sf ../sysclone-layer2.5-greetd-install.service \
+    "$ROOT/etc/systemd/system/multi-user.target.wants/sysclone-layer2.5-greetd-install.service"
 fi
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${SCRIPT_DIR%/seeds/*}"
-
-ROOT_MNT="${ROOT_MNT:-}"
-if [[ -z "${ROOT_MNT}" ]]; then
-  if [[ -n "${ROOT_LABEL:-}" ]]; then
-    dev="$(blkid -L "${ROOT_LABEL}" 2>/dev/null || true)"
-    if [[ -n "$dev" ]]; then
-      ROOT_MNT="$(findmnt -n -o TARGET --source "$dev" 2>/dev/null || true)"
-    fi
-  fi
-fi
-if [[ -z "${ROOT_MNT}" || ! -d "${ROOT_MNT}/etc" ]]; then
-  echo "[seed:layer2.5] Could not determine ROOT_MNT. Ensure the root partition is mounted or export ROOT_MNT/ROOT_LABEL." >&2
-  exit 1
-fi
-
-echo "[seed] layer2.5: staging greetd on-boot installer"
-$SUDO install -D -m 0755 "$REPO_ROOT/tools/payloads/usr-local-sbin/sysclone-layer2.5-greetd-install.sh" \
-  "$ROOT_MNT/usr/local/sbin/sysclone-layer2.5-greetd-install.sh"
-$SUDO install -D -m 0644 "$REPO_ROOT/tools/payloads/etc/systemd/system/sysclone-layer2.5-greetd-install.service" \
-  "$ROOT_MNT/etc/systemd/system/sysclone-layer2.5-greetd-install.service"
-$SUDO install -D -m 0644 "$REPO_ROOT/tools/payloads/etc-greetd-config.toml" \
-  "$ROOT_MNT/etc/greetd/config.toml"
-
-$SUDO install -d -m 0755 "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
-$SUDO ln -sf ../sysclone-layer2.5-greetd-install.service \
-  "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer2.5-greetd-install.service"
-
-echo "[seed] layer2.5: greetd installer staged (will run on first boot)"
+echo "[seed] layer2.5: greetd staged"
