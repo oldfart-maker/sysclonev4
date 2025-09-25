@@ -160,9 +160,49 @@ ensure-unmounted: ## Unmount ROOT/BOOT if mounted
 	  echo "[ensure-unmounted] umount $(ROOT_MNT)/boot"; \
 	  sudo umount "$(ROOT_MNT)/boot"; \
 	fi; \
-	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/devnull; then \
+	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/dev/null; then \
 	  echo "[ensure-unmounted] umount $(ROOT_MNT)"; \
 	  sudo umount "$(ROOT_MNT)"; \
 	fi; \
 	echo "[ensure-unmounted] done"
 # ------------------------------------------------------------
+
+# ====================== Layer2 mounting/cleanup (robust) ======================
+.PHONY: ensure-unmounted clear-layer-stamps
+
+ensure-unmounted: ## Unmount ROOT/BOOT if mounted (with sync, idempotent)
+	@set -euo pipefail; \
+	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
+	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
+	sudo sync || true; \
+	if [ -n "$$BOOT_DEV" ] && findmnt -rn -S "$$BOOT_DEV" >/dev/null 2>&1; then \
+	  echo "[ensure-unmounted] umount $(ROOT_MNT)/boot"; \
+	  sudo umount "$(ROOT_MNT)/boot"; \
+	fi; \
+	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/dev/null 2>&1; then \
+	  echo "[ensure-unmounted] umount $(ROOT_MNT)"; \
+	  sudo umount "$(ROOT_MNT)"; \
+	fi; \
+	sudo sync || true; \
+	echo "[ensure-unmounted] done"
+
+clear-layer-stamps: ## Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
+	@set -euo pipefail; \
+	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
+	sudo mkdir -p "$$STAMP_DIR"; \
+	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
+	          "$$STAMP_DIR/.layer2.5-greetd-installed" \
+	          "$$STAMP_DIR/.fix-ownership-done" || true; \
+	echo "[clear-layer-stamps] cleared stamps under $$STAMP_DIR"
+
+# Re-declare End-of-Flow targets so we always clear stamps after seeding
+seed-layer2-all: ensure-mounted ## Layer 2 full (without DM) + clear stamps
+	bash seeds/layer2/seed-wayland.sh
+	bash seeds/layer2/seed-sway.sh
+	$(MAKE) clear-layer-stamps
+
+seed-layer2.5-greetd: ensure-mounted ## (Optional) greetd + tuigreet + clear stamps
+	bash seeds/layer2.5/seed-greetd.sh
+	$(MAKE) clear-layer-stamps
+# ==============================================================================
+
