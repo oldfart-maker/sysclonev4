@@ -6,3 +6,6 @@ export XDG_SESSION_TYPE=wayland
 systemctl --user daemon-reload || true
 systemctl --user enable --now pipewire.service pipewire-pulse.service wireplumber.service || true
 exec sway
+export XDG_CURRENT_DESKTOP=
+export XDG_SESSION_TYPE=
+export WAYLAND_DISPLAY=-e
