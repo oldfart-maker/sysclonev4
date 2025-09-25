@@ -3,5 +3,7 @@ vt = 1
 switch = true
 
 [default_session]
-command = "/usr/local/bin/greetd-launcher"
+# To use Tuigreet later, swap the next line for:
+# command = "/usr/local/bin/greetd-launcher"
+command = "/usr/bin/agreety --cmd /usr/local/bin/start-sway"
 user = "greeter"

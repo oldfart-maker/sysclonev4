@@ -3,4 +3,3 @@ Name=Sway
 Comment=An i3-compatible Wayland compositor
 Exec=/usr/local/bin/start-sway
 Type=Application
-DesktopNames=sway
