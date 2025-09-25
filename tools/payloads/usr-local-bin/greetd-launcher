@@ -1,30 +1,22 @@
 #!/bin/sh
-set -eu
-
+log=/tmp/greetd-greeter.err
+exec >>"$log" 2>&1
+echo "=== launcher start $(date) uid=$(id -u) gid=$(id -g) ==="
+set -ux
 CMD="/usr/local/bin/start-sway"
-
-# Minimal, safe defaults for Wayland
-[ -n "${XDG_SESSION_TYPE:-}" ] || export XDG_SESSION_TYPE=wayland
+[ -n "${XDG_SESSION_TYPE:-}" ]    || export XDG_SESSION_TYPE=wayland
 [ -n "${XDG_CURRENT_DESKTOP:-}" ] || export XDG_CURRENT_DESKTOP=sway
-
-if command -v tuigreet >/dev/null 2>&1; then
-  HELP="$(tuigreet --help 2>&1 || true)"
-  FLAGS=""
-
-  has() { printf '%s\n' "$HELP" | grep -q -- "$1"; }
-
-  # add flags only if this tuigreet supports them
-  has '--time'            && FLAGS="$FLAGS --time"
-  has '--remember-user'   && FLAGS="$FLAGS --remember-user"
-  # older releases used --remember instead of --remember-user
-  ! has '--remember-user' && has '--remember' && FLAGS="$FLAGS --remember"
-  has '--user-menu'       && FLAGS="$FLAGS --user-menu"
-  has '--asterisks'       && FLAGS="$FLAGS --asterisks"
-
+have() { command -v "$1" >/dev/null 2>&1; }
+if have tuigreet; then
+  HELP="$(tuigreet --help 2>&1 || true)"; FLAGS=""
+  printf '%s' "$HELP" | grep -q -- '--time'      && FLAGS="$FLAGS --time"
+  printf '%s' "$HELP" | grep -q -- '--user-menu' && FLAGS="$FLAGS --user-menu"
+  echo "[launcher] exec: tuigreet $FLAGS --cmd $CMD"
   exec tuigreet $FLAGS --cmd "$CMD"
-elif command -v agreety >/dev/null 2>&1; then
+elif have agreety; then
+  echo "[launcher] exec: agreety --cmd $CMD"
   exec agreety --cmd "$CMD"
 else
-  echo "No greeter found (tuigreet/agreety). Falling back to TTY login." >&2
+  echo "[launcher] no greeter found; exec /bin/login -p"
   exec /bin/login -p
 fi

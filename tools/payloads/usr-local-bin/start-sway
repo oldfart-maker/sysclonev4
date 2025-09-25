@@ -1,8 +1,7 @@
 #!/bin/sh
 set -eu
-# Minimal launcher the greeter and TTY can use
 export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=sway
-# Best effort: import env to user services when running as a user
+# best-effort import (no harm if it fails)
 systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true
 exec /usr/bin/sway
