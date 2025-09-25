@@ -167,9 +167,13 @@ ensure-unmounted: ## Unmount ROOT/BOOT if mounted
 	echo "[ensure-unmounted] done"
 # ------------------------------------------------------------
 
-# ====================== Layer2 mounting/cleanup (robust) ======================
-.PHONY: ensure-unmounted clear-layer-stamps
 
+
+
+# ====================== Canonical Layer2 targets (de-duplicated) ======================
+.PHONY: ensure-unmounted clear-layer-stamps seed-layer2-all seed-layer2.5-greetd-all ensure-mount
+
+# Robust unmount (idempotent, synced)
 ensure-unmounted: ## Unmount ROOT/BOOT if mounted (with sync, idempotent)
 	@set -euo pipefail; \
 	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
@@ -186,7 +190,8 @@ ensure-unmounted: ## Unmount ROOT/BOOT if mounted (with sync, idempotent)
 	sudo sync || true; \
 	echo "[ensure-unmounted] done"
 
-clear-layer-stamps: ## Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
+# Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
+clear-layer-stamps: ## Clear one-shot stamps for Layer 2/2.5
 	@set -euo pipefail; \
 	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
 	sudo mkdir -p "$$STAMP_DIR"; \
@@ -195,14 +200,16 @@ clear-layer-stamps: ## Always clear one-shot stamps so Layer 2/2.5 reruns on nex
 	          "$$STAMP_DIR/.fix-ownership-done" || true; \
 	echo "[clear-layer-stamps] cleared stamps under $$STAMP_DIR"
 
-# Re-declare End-of-Flow targets so we always clear stamps after seeding
-seed-layer2-all: ensure-mounted ## Layer 2 full (without DM) + clear stamps
-	bash seeds/layer2/seed-wayland.sh
-	bash seeds/layer2/seed-sway.sh
+# Run existing sub-targets once; then clear stamps
+seed-layer2-all: ensure-mounted seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM) + clear stamps
 	$(MAKE) clear-layer-stamps
 
-seed-layer2.5-greetd: ensure-mounted ## (Optional) greetd + tuigreet + clear stamps
-	bash seeds/layer2.5/seed-greetd.sh
+# Wrapper that runs the original greetd target; then clear stamps
+seed-layer2.5-greetd-all: ensure-mounted seed-layer2.5-greetd ## (Optional) greetd + tuigreet + clear stamps
 	$(MAKE) clear-layer-stamps
-# ==============================================================================
+
+# Typo-proof alias
+ensure-mount: ensure-mounted  ## alias for ensure-mounted
+	@:
+# ================================================================================
 
