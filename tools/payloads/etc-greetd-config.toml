@@ -1,9 +1,8 @@
-# greetd config (text greeter via agreety)
 [terminal]
 vt = 1
+switch = true
 
 [default_session]
-# run a minimal text greeter that, after successful login,
-# executes our session command.
-command = "agreety --cmd start-sway"
+# Wrapper prefers tuigreet, falls back to agreety
+command = "/usr/local/bin/greetd-launcher"
 user = "greeter"

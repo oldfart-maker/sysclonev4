@@ -1,6 +1,7 @@
 # Minimal, “it boots” Sway config
 set $mod Mod4
 bindsym $mod+Return exec foot
+bindsym $mod+Shift+q exit
 bindsym $mod+d exec dmenu_path | dmenu | xargs swaymsg exec --
 
 exec_always swaybg -c "#222222"

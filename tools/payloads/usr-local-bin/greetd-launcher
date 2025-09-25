@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+CMD="start-sway"
+
+if command -v tuigreet >/dev/null 2>&1; then
+  exec tuigreet --remember --time --cmd "$CMD"
+elif command -v agreety >/dev/null 2>&1; then
+  exec agreety --cmd "$CMD"
+else
+  echo "No greeter found (tuigreet/agreety). Check your install." >&2
+  exit 1
+fi
