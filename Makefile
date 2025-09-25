@@ -153,24 +153,6 @@ ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
 	echo "[ensure-mounted] ROOT=$(ROOT_MNT) BOOT=$(ROOT_MNT)/boot ready"
 
 ensure-unmounted: ## Unmount ROOT/BOOT if mounted
-	@set -euo pipefail; \
-	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
-	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
-	if [ -n "$$BOOT_DEV" ] && findmnt -rn -S "$$BOOT_DEV" >/dev/null; then \
-	  echo "[ensure-unmounted] umount $(ROOT_MNT)/boot"; \
-	  sudo umount "$(ROOT_MNT)/boot"; \
-	fi; \
-	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/dev/null; then \
-	  echo "[ensure-unmounted] umount $(ROOT_MNT)"; \
-	  sudo umount "$(ROOT_MNT)"; \
-	fi; \
-	echo "[ensure-unmounted] done"
-# ------------------------------------------------------------
-
-
-
-
-# ====================== Canonical Layer2 targets (de-duplicated) ======================
 .PHONY: ensure-unmounted clear-layer-stamps seed-layer2-all seed-layer2.5-greetd-all ensure-mount
 
 # Robust unmount (idempotent, synced)
@@ -197,19 +179,3 @@ clear-layer-stamps: ## Clear one-shot stamps for Layer 2/2.5
 	sudo mkdir -p "$$STAMP_DIR"; \
 	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
 	          "$$STAMP_DIR/.layer2.5-greetd-installed" \
-	          "$$STAMP_DIR/.fix-ownership-done" || true; \
-	echo "[clear-layer-stamps] cleared stamps under $$STAMP_DIR"
-
-# Run existing sub-targets once; then clear stamps
-seed-layer2-all: ensure-mounted seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM) + clear stamps
-	$(MAKE) clear-layer-stamps
-
-# Wrapper that runs the original greetd target; then clear stamps
-seed-layer2.5-greetd-all: ensure-mounted seed-layer2.5-greetd ## (Optional) greetd + tuigreet + clear stamps
-	$(MAKE) clear-layer-stamps
-
-# Typo-proof alias
-ensure-mount: ensure-mounted  ## alias for ensure-mounted
-	@:
-# ================================================================================
-
