@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
 
 log() { printf '%s %s\n' "[L1]" "$*"; }
