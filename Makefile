@@ -223,6 +223,32 @@ seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
 	@echo "[layer1] layer1-auto"
 	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-auto.sh
 
-seed-layer1-all: seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
+seed-layer1-all: ensure-mounted clear-layer1-stamps seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
 	@echo "[layer1] done"
 # --------------------------------------------------------------
+
+clear-layer1-stamps:
+
+	@set -euo pipefail; \
+	ROOT_MNT="$(ROOT_MNT)"; \
+	STAMP_DIR="$$ROOT_MNT/var/lib/sysclone"; \
+	echo "[clear-layer1-stamps] at $$STAMP_DIR"; \
+	sudo mkdir -p "$$STAMP_DIR"; \
+	sudo rm -f \
+	  "$$STAMP_DIR/.layer1-installed" \
+	  "$$STAMP_DIR/.first-boot-seeded" \
+	  "$$STAMP_DIR/.first-boot-installed" \
+	  "$$STAMP_DIR/.layer1*" || true; \
+	ls -l "$$STAMP_DIR" || true; \
+	echo "[clear-layer1-stamps] done"
+
+clear-all-stamps:
+
+	@set -euo pipefail; \
+	ROOT_MNT="$(ROOT_MNT)"; \
+	STAMP_DIR="$$ROOT_MNT/var/lib/sysclone"; \
+	echo "[clear-all-stamps] at $$STAMP_DIR"; \
+	sudo mkdir -p "$$STAMP_DIR"; \
+	sudo rm -f "$$STAMP_DIR"/.layer*-installed "$$STAMP_DIR"/.first-boot* 2>/dev/null || true; \
+	ls -l "$$STAMP_DIR" || true; \
+	echo "[clear-all-stamps] done"
