@@ -2,6 +2,5 @@
 set -eu
 export XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-wayland}
 export XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-sway}
-# import env for user units (best-effort)
 systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true
 exec /usr/bin/sway

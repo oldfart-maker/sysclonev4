@@ -2,8 +2,6 @@
 set -eu
 
 CMD="/usr/local/bin/start-sway"
-
-# Minimal, safe defaults
 [ -n "${XDG_SESSION_TYPE:-}" ] || export XDG_SESSION_TYPE=wayland
 [ -n "${XDG_CURRENT_DESKTOP:-}" ] || export XDG_CURRENT_DESKTOP=sway
 
@@ -12,7 +10,7 @@ if command -v tuigreet >/dev/null 2>&1; then
   FLAGS=""
   has() { printf '%s\n' "$HELP" | grep -q -- "$1"; }
   has '--time'          && FLAGS="$FLAGS --time"
-  has '--remember-user' || has '-r' || has '--remember' && FLAGS="$FLAGS -r"
+  { has '--remember-user' || has '-r' || has '--remember'; } && FLAGS="$FLAGS -r"
   has '--user-menu'     && FLAGS="$FLAGS --user-menu"
   has '--asterisks'     && FLAGS="$FLAGS --asterisks"
   exec tuigreet $FLAGS --cmd "$CMD"
