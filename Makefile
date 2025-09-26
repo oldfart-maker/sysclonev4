@@ -196,30 +196,14 @@ seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (ag
 #  - We DO NOT zap stamps here (use your existing zap target if you want a fresh boot)
 #  - We run scripts only if they exist/executable, so this stays portable
 #  - ROOT_MNT is passed through sudo so scripts can write to the mounted card
-seed-all: ensure-mounted  ## Seed everything (disable wizard, L1 auto, first-boot svc, Layer2, Layer2.5)
-	@echo "[seed-all] step 1/5: disable-first-boot"
-	@$(MAKE) seed-firstboot-disable
-	@echo "[seed-all] step 2/5: layer1-auto"
-	@$(MAKE) seed-layer1-auto
-	@echo "[seed-all] step 3/5: seed-first-boot-service"
-	@$(MAKE) seed-firstboot-service
-	@echo "[seed-all] step 4/5: layer2 (Wayland + Sway)"
-	@$(MAKE) seed-layer2-all
-	@echo "[seed-all] step 5/5: layer2.5 (greetd/tuigreet)"
-	@$(MAKE) seed-layer2.5-greetd
+seed-all: ensure-mounted ## Aggregate: Layer1 + Layer2 + Layer2.5
+	@echo "[seed-all] step 1/4: layer1 (disable wizard)"
+	$(MAKE) seed-layer1-disable-firstboot
+	@echo "[seed-all] step 2/4: layer1 (payload + service)"
+	$(MAKE) seed-layer1-auto
+	$(MAKE) seed-layer1-service
+	@echo "[seed-all] step 3/4: layer2 (Wayland + Sway)"
+	$(MAKE) seed-layer2-all
+	@echo "[seed-all] step 4/4: layer2.5 (greetd/tuigreet)"
+	$(MAKE) seed-layer2.5-greetd
 	@echo "[seed-all] done"
-## -------- Standard tool-backed seeding targets (tools/* scripts) --------
-.PHONY: seed-firstboot-disable seed-firstboot-service seed-layer1-auto
-
-seed-firstboot-disable: ensure-mounted  ## Disable OEM/first-boot wizard
-	@echo "[seed-firstboot-disable] tools/seed-disable-firstboot.sh"
-	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-disable-firstboot.sh
-
-seed-firstboot-service: ensure-mounted  ## Install/enable first-boot service
-	@echo "[seed-firstboot-service] tools/seed-first-boot-service.sh"
-	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-first-boot-service.sh
-
-seed-layer1-auto: ensure-mounted  ## Layer1 auto tweaks via tools/seed-layer1-auto.sh
-	@echo "[seed-layer1-auto] tools/seed-layer1-auto.sh"
-	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-auto.sh
-
