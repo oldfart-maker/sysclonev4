@@ -1,0 +1,14 @@
+[Unit]
+Description=SysClone Layer 2.5 On-Boot Installer (greetd + seatd + greeter)
+ConditionPathExists=!/var/lib/sysclone/.layer2.5-greetd-installed
+Wants=network-online.target systemd-timesyncd.service
+After=network-online.target systemd-timesyncd.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/rm -f /var/lib/pacman/db.lck
+ExecStart=/usr/local/sbin/sysclone-layer2.5-greetd-install.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
