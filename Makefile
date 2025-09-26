@@ -198,7 +198,7 @@ seed-layer1-disable-firstboot: ensure-mounted ## Layer1: disable any OEM first-b
 
 seed-layer1-service: ensure-mounted ## Layer1: install/enable our first-boot service on target
 	@echo "[layer1] seed-first-boot-service"
-	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-first-boot-service.sh
+	sudo env ROOT_MNT="$(ROOT_MNT)" sudo env ROOT_MNT="$(ROOT_MNT)" WIFI_SSID="$(WIFI_SSID)" WIFI_PASS="$(WIFI_PASS)" USERNAME="$(USERNAME)" USERPASS="$(USERPASS)" bash tools/seed-first-boot-service.sh
 
 seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
 	@echo "[layer1] layer1-auto"
@@ -207,8 +207,6 @@ seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
 seed-layer1-all: ensure-mounted clear-layer1-stamps ensure-mounted clear-layer1-stamps seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
 	@echo "[layer1] done"
 # --------------------------------------------------------------
-
-.PHONY: clear-layer-stamps zap-layer-stamps
 
 .PHONY: clear-layer1-stamps clear-layer2-stamps clear-all-stamps \
         clear-layer-stamps zap-layer-stamps
