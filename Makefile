@@ -156,23 +156,7 @@ ensure-unmounted:
 	else echo "[ensure-unmounted] $$ROOT_MNT not mounted; skip"; fi; \
 	echo "[ensure-unmounted] done"
 # Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
-clear-layer2-stamps: ## Clear one-shot stamps for Layer 2/2.5
-	@set -euo pipefail; \
-	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
-	sudo mkdir -p "$$STAMP_DIR"; \
-	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
-	          "$$STAMP_DIR/.layer2.5-greetd-installed" \
-
 .PHONY: zap-layer-stamps
-clear-all-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
-	@set -e; \
-	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
-	sudo mkdir -p "$$STAMP_DIR"; \
-	sudo rm -f "$$STAMP_DIR/.layer2-installed" \
-	           "$$STAMP_DIR/.layer2.5-greetd-installed" \
-	           "$$STAMP_DIR/.fix-ownership-done" || true; \
-	echo "[zap-layer-stamps] removed any stamps under $$STAMP_DIR"
-
 .PHONY: seed-layer2-all-fresh
 seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
 	@true
@@ -224,34 +208,28 @@ seed-layer1-all: ensure-mounted clear-layer1-stamps ensure-mounted clear-layer1-
 	@echo "[layer1] done"
 # --------------------------------------------------------------
 
-clear-layer1-stamps: ## Clear Layer 1 stamps
-
-	@set -euo pipefail; \
-	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
-	echo "[clear-layer1-stamps] at $$STAMP_DIR"; \
-	sudo mkdir -p "$$STAMP_DIR"; \
-	sudo rm -f \
-	  "$$STAMP_DIR/.layer1-installed" \
-	  "$$STAMP_DIR/.first-boot-seeded" \
-	  "$$STAMP_DIR/.first-boot-installed" \
-	  "$$STAMP_DIR/.layer1"* 2>/dev/null || true; \
-	ls -l "$$STAMP_DIR" || true; \
-	echo "[clear-layer1-stamps] done"
-clear-all-stamps:
-
-	@set -euo pipefail; \
-	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
-	echo "[clear-all-stamps] at $$STAMP_DIR"; \
-	sudo mkdir -p "$$STAMP_DIR"; \
-	sudo rm -f "$$STAMP_DIR"/.layer*-installed "$$STAMP_DIR"/.first-boot* 2>/dev/null || true; \
-	ls -l "$$STAMP_DIR" || true; \
-	echo "[clear-all-stamps] done"
-
-# ---- Back-compat aliases (DEPRECATED) --------------------------------
 .PHONY: clear-layer-stamps zap-layer-stamps
-clear-layer-stamps: ## [deprecated] use clear-layer2-stamps
-	@$(MAKE) clear-layer2-stamps
 
-zap-layer-stamps: ## [deprecated] use clear-all-stamps
-	@$(MAKE) clear-all-stamps
-# ----------------------------------------------------------------------
+.PHONY: clear-layer1-stamps clear-layer2-stamps clear-all-stamps \
+        clear-layer-stamps zap-layer-stamps
+
+## Clear Layer 1 first-boot stamps in $(ROOT_MNT)
+clear-layer1-stamps:
+	@echo "[clear-layer1-stamps] at $(ROOT_MNT)/var/lib/sysclone"
+	@sudo rm -f "$(ROOT_MNT)/var/lib/sysclone/first-boot.done" \
+	            "$(ROOT_MNT)/var/lib/sysclone/manjaro-firstboot-disabled" 2>/dev/null || true
+	@echo "[clear-layer1-stamps] done"
+
+## Clear Layer 2 stamps in $(ROOT_MNT)
+clear-layer2-stamps:
+	@echo "[clear-layer2-stamps] at $(ROOT_MNT)/var/lib/sysclone"
+	@sudo rm -rf "$(ROOT_MNT)/var/lib/sysclone/layer2" 2>/dev/null || true
+	@sudo find "$(ROOT_MNT)/var/lib/sysclone" -maxdepth 1 -type f -name 'layer2*.stamp' -exec rm -f {} + 2>/dev/null || true
+	@echo "[clear-layer2-stamps] done"
+
+## Clear all sysclone stamps in $(ROOT_MNT)
+clear-all-stamps: clear-layer1-stamps clear-layer2-stamps
+
+# ---- Back-compat aliases (do not duplicate logic) ----
+clear-layer-stamps: clear-layer2-stamps
+zap-layer-stamps:   clear-all-stamps
