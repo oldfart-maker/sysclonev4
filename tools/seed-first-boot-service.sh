@@ -16,36 +16,23 @@ else
 fi
 
 sudo mkdir -p "$BOOT_MOUNT" "$ROOT_MOUNT"
-[[ -e "$BOOT_PART" ]] && sudo mount "$BOOT_PART" "$BOOT_MOUNT" 2>/dev/null || true
-sudo mount "$ROOT_PART" "$ROOT_MOUNT"
+log "[install] done"
 
-log "[install] BOOT=${BOOT_PART:-N/A} mounted at $BOOT_MOUNT"
-log "[install] ROOT=$ROOT_PART mounted at $ROOT_MOUNT"
+# Unmount only after everything is staged
 
-# Install payload + unit
-sudo install -Dm755 seeds/layer1/first-boot-provision.sh "$ROOT_MOUNT/usr/local/lib/sysclone/first-boot-provision.sh"
-sudo install -Dm644 seeds/layer1/first-boot.service        "$ROOT_MOUNT/etc/systemd/system/sysclone-first-boot.service"
-
-# Ensure Wi-Fi script present on ROOT (copy from BOOT if needed)
-if [[ -e "$BOOT_PART" && -f "$BOOT_MOUNT/sysclone-first-boot.sh" ]]; then
-  sudo install -Dm755 "$BOOT_MOUNT/sysclone-first-boot.sh" "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
-fi
-
-# Enable the unit
-sudo mkdir -p "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants"
-sudo ln -sf ../sysclone-first-boot.service "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/sysclone-first-boot.service"
+# --- write /etc/sysclone/firstboot.env for first-boot ---
+# allow local values from tools/.env if present
+if [ -f "./tools/.env" ]; then . "./tools/.env"; fi
+sudo install -d -m 0755 "$ROOT_MOUNT/etc/sysclone"
+sudo bash -c 'cat > "$ROOT_MOUNT/etc/sysclone/firstboot.env"' <<EOF
+WIFI_SSID=${WIFI_SSID:-}
+WIFI_PASS=${WIFI_PASS:-}
+USERNAME=${USERNAME:-username}
+USERPASS=${USERPASS:-username}
+EOF
+sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
+# --------------------------------------------------------
 
 sudo umount "$ROOT_MOUNT" || true
 [[ -e "$BOOT_PART" ]] && sudo umount "$BOOT_MOUNT" || true
-log "[install] done"
 
-# --- write /etc/sysclone/firstboot.env for first-boot ---
-install -d -m 0755 "$ROOT_MNT/etc/sysclone"
-cat > "$ROOT_MNT/etc/sysclone/firstboot.env" <<EOV
-WIFI_SSID=${WIFI_SSID:-}
-WIFI_PASS=${WIFI_PASS:-}
-USERNAME=${USERNAME:-}
-USERPASS=${USERPASS:-}
-EOV
-chmod 0640 "$ROOT_MNT/etc/sysclone/firstboot.env" || true
-# --------------------------------------------------------

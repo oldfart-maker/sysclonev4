@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+# Fail on error; defer -u until after we source env
+set -Eeuo pipefail
+
+ENV_FILE="/etc/sysclone/firstboot.env"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+fi
+# Now treat unbound vars as errors
+set -u
+
+# Safe defaults
+: "${WIFI_SSID:=}"
+: "${WIFI_PASS:=}"
+: "${USERNAME:=username}"
+: "${USERPASS:=username}"
 #!/usr/bin/env bash
 set -Eeuo pipefail
 

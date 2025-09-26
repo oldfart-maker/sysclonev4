@@ -231,3 +231,42 @@ clear-all-stamps: clear-layer1-stamps clear-layer2-stamps
 # ---- Back-compat aliases (do not duplicate logic) ----
 clear-layer-stamps: clear-layer2-stamps
 zap-layer-stamps:   clear-all-stamps
+
+# ---- Check the status of layer stamps ---
+.PHONY: check-stamps show-stamps
+
+# check-stamps: verify presence of one or more stamp files under ROOT_MNT/var/lib/sysclone.
+# Usage:
+#   make check-stamps                  # checks common stamps
+#   make check-stamps STAMP=first-boot.done
+check-stamps: ensure-mounted ## Check for sysclone stamps (use STAMP=<name> to check a specific one)
+	@DIR="$(ROOT_MNT)/var/lib/sysclone"; \
+	if [ ! -d "$$DIR" ]; then \
+	  echo "[stamp] directory missing: $$DIR"; exit 0; \
+	fi; \
+	if [ -n "$(STAMP)" ]; then \
+	  if sudo test -e "$$DIR/$(STAMP)"; then \
+	    echo "[stamp] present: $$DIR/$(STAMP)"; \
+	  else \
+	    echo "[stamp] MISSING: $$DIR/$(STAMP)"; \
+	  fi; \
+	else \
+	  found=0; \
+	  for f in first-boot.done manjaro-firstboot-disabled layer2.5-greetd-installed; do \
+	    if sudo test -e "$$DIR/$$f"; then echo "[stamp] present: $$DIR/$$f"; found=1; fi; \
+	  done; \
+	  if [ "$$found" = 0 ]; then echo "[stamp] none of the known stamps found in $$DIR"; fi; \
+	fi
+
+show-stamps: ensure-mounted ## List all stamp files under ROOT_MNT/var/lib/sysclone
+	@DIR="$(ROOT_MNT)/var/lib/sysclone"; \
+	if [ -d "$$DIR" ]; then \
+	  echo "[stamps] listing $$DIR"; \
+	  sudo ls -la "$$DIR"; \
+	else \
+	  echo "[stamps] directory missing: $$DIR"; \
+	fi
+
+.PHONY: seed-layer-all
+seed-layer-all: seed-all
+	@true
