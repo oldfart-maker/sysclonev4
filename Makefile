@@ -142,22 +142,19 @@ ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
 	fi; \
 	echo "[ensure-mounted] ROOT=$(ROOT_MNT) BOOT=$(ROOT_MNT)/boot ready"
 
-ensure-unmounted: ## Unmount ROOT/BOOT if mounted (with sync, idempotent)
-	@set -euo pipefail; \
-	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
-	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
-	sudo sync || true; \
-	if [ -n "$$BOOT_DEV" ] && findmnt -rn -S "$$BOOT_DEV" >/dev/null 2>&1; then \
-	  echo "[ensure-unmounted] umount $(ROOT_MNT)/boot"; \
-	  sudo umount "$(ROOT_MNT)/boot"; \
-	fi; \
-	if [ -n "$$ROOT_DEV" ] && findmnt -rn -S "$$ROOT_DEV" >/dev/null 2>&1; then \
-	  echo "[ensure-unmounted] umount $(ROOT_MNT)"; \
-	  sudo umount "$(ROOT_MNT)"; \
-	fi; \
-	sudo sync || true; \
-	echo "[ensure-unmounted] done"
+ensure-unmounted:
 
+	@set -euo pipefail; \
+	ROOT_MNT="$(ROOT_MNT)"; \
+	BOOT_MNT="$$ROOT_MNT/boot"; \
+	echo "[ensure-unmounted] checking $$BOOT_MNT and $$ROOT_MNT"; \
+	if findmnt -rn "$$BOOT_MNT" >/dev/null 2>&1; then \
+	  echo "[ensure-unmounted] umount $$BOOT_MNT"; sudo umount "$$BOOT_MNT" || true; \
+	else echo "[ensure-unmounted] $$BOOT_MNT not mounted; skip"; fi; \
+	if findmnt -rn "$$ROOT_MNT" >/dev/null 2>&1; then \
+	  echo "[ensure-unmounted] umount $$ROOT_MNT"; sudo umount "$$ROOT_MNT" || true; \
+	else echo "[ensure-unmounted] $$ROOT_MNT not mounted; skip"; fi; \
+	echo "[ensure-unmounted] done"
 # Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
 clear-layer-stamps: ## Clear one-shot stamps for Layer 2/2.5
 	@set -euo pipefail; \
@@ -223,30 +220,27 @@ seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
 	@echo "[layer1] layer1-auto"
 	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-auto.sh
 
-seed-layer1-all: ensure-mounted clear-layer1-stamps seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
+seed-layer1-all: ensure-mounted clear-layer1-stamps ensure-mounted clear-layer1-stamps seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
 	@echo "[layer1] done"
 # --------------------------------------------------------------
 
 clear-layer1-stamps:
 
 	@set -euo pipefail; \
-	ROOT_MNT="$(ROOT_MNT)"; \
-	STAMP_DIR="$$ROOT_MNT/var/lib/sysclone"; \
+	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
 	echo "[clear-layer1-stamps] at $$STAMP_DIR"; \
 	sudo mkdir -p "$$STAMP_DIR"; \
 	sudo rm -f \
 	  "$$STAMP_DIR/.layer1-installed" \
 	  "$$STAMP_DIR/.first-boot-seeded" \
 	  "$$STAMP_DIR/.first-boot-installed" \
-	  "$$STAMP_DIR/.layer1*" || true; \
+	  "$$STAMP_DIR/.layer1"* 2>/dev/null || true; \
 	ls -l "$$STAMP_DIR" || true; \
 	echo "[clear-layer1-stamps] done"
-
 clear-all-stamps:
 
 	@set -euo pipefail; \
-	ROOT_MNT="$(ROOT_MNT)"; \
-	STAMP_DIR="$$ROOT_MNT/var/lib/sysclone"; \
+	STAMP_DIR="$(ROOT_MNT)/var/lib/sysclone"; \
 	echo "[clear-all-stamps] at $$STAMP_DIR"; \
 	sudo mkdir -p "$$STAMP_DIR"; \
 	sudo rm -f "$$STAMP_DIR"/.layer*-installed "$$STAMP_DIR"/.first-boot* 2>/dev/null || true; \
