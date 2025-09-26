@@ -89,14 +89,6 @@ version-bump:  ## Write VERSION file + commit: make version-bump VERSION=vX.Y.Z
         seed-layer1 seed-first-boot-service seed-disable-firstboot \
         tag version-bump
 
-# -------- Convenience --------
-seed-all:  ## Disable firstboot, seed layer1, install oneshot (by-label if ROOT_PART/BOOT_PART exported)
-	./tools/seed-disable-firstboot.sh
-	./tools/seed-layer1-auto.sh
-	./tools/seed-first-boot-service.sh
-
-.PHONY: seed-all
-
 tidy:  ## Remove local backup files (.bak.*) from tools/ and seeds/
 	@rm -f tools/*.bak* 2>/dev/null || true
 	@find seeds -type f -name '*.bak.*' -delete 2>/dev/null || true
@@ -188,7 +180,48 @@ zap-layer-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
 seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
 	@true
 
-
 seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
 	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 
+.PHONY: seed-all
+
+# Unified seeding pipeline:
+#  1) disable first-boot wizard
+#  2) run Layer 1 auto seed
+#  3) install/enable first-boot service
+#  4) Layer 2 (Wayland + Sway)
+#  5) Layer 2.5 (greetd/tuigreet)
+#
+# Notes:
+#  - We DO NOT zap stamps here (use your existing zap target if you want a fresh boot)
+#  - We run scripts only if they exist/executable, so this stays portable
+#  - ROOT_MNT is passed through sudo so scripts can write to the mounted card
+seed-all: ensure-mounted ## Disable first-boot, layer1 auto, first-boot service, then layer2 + layer2.5
+	@echo "[seed-all] step 1/5: disable-first-boot"
+	@if [ -x seeds/firstboot/disable-first-boot.sh ]; then \
+	  sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/firstboot/disable-first-boot.sh; \
+	else \
+	  echo "[seed-all] (skip) seeds/firstboot/disable-first-boot.sh not present"; \
+	fi
+
+	@echo "[seed-all] step 2/5: layer1-auto"
+	@if [ -x seeds/layer1/layer1-auto.sh ]; then \
+	  sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/layer1/layer1-auto.sh; \
+	else \
+	  echo "[seed-all] (skip) seeds/layer1/layer1-auto.sh not present"; \
+	fi
+
+	@echo "[seed-all] step 3/5: seed-first-boot-service"
+	@if [ -x seeds/firstboot/seed-first-boot-service.sh ]; then \
+	  sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/firstboot/seed-first-boot-service.sh; \
+	else \
+	  echo "[seed-all] (skip) seeds/firstboot/seed-first-boot-service.sh not present"; \
+	fi
+
+	@echo "[seed-all] step 4/5: layer2 (Wayland + Sway)"
+	$(MAKE) seed-layer2-all
+
+	@echo "[seed-all] step 5/5: layer2.5 (greetd/tuigreet)"
+	$(MAKE) seed-layer2.5-greetd
+
+	@echo "[seed-all] done"
