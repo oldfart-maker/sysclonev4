@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
-
 CMD="/usr/local/bin/start-sway"
+
 [ -n "${XDG_SESSION_TYPE:-}" ] || export XDG_SESSION_TYPE=wayland
 [ -n "${XDG_CURRENT_DESKTOP:-}" ] || export XDG_CURRENT_DESKTOP=sway
 
@@ -9,14 +9,13 @@ if command -v tuigreet >/dev/null 2>&1; then
   HELP="$(tuigreet --help 2>&1 || true)"
   FLAGS=""
   has() { printf '%s\n' "$HELP" | grep -q -- "$1"; }
-  has '--time'          && FLAGS="$FLAGS --time"
-  { has '--remember-user' || has '-r' || has '--remember'; } && FLAGS="$FLAGS -r"
-  has '--user-menu'     && FLAGS="$FLAGS --user-menu"
-  has '--asterisks'     && FLAGS="$FLAGS --asterisks"
+  has '--time'            && FLAGS="$FLAGS --time"
+  has '--remember'        && FLAGS="$FLAGS --remember"
+  has '--user-menu'       && FLAGS="$FLAGS --user-menu"
+  has '--asterisks'       && FLAGS="$FLAGS --asterisks"
   exec tuigreet $FLAGS --cmd "$CMD"
 elif command -v agreety >/dev/null 2>&1; then
   exec agreety --cmd "$CMD"
 else
-  echo "No greeter found (tuigreet/agreety). Falling back to login." >&2
   exec /bin/login -p
 fi

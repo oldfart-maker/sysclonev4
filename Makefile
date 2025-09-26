@@ -187,6 +187,8 @@ zap-layer-stamps: ensure-mounted ## Remove L2 stamps on the mounted rootfs
 .PHONY: seed-layer2-all-fresh
 seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
 	@true
+
+
 seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
-	sudo env ROOT_MNT="1000 3 90 98 108 983 985 986 988 990 991 992 995 998 1000ROOT_MNT)" bash seeds/layer2.5/seed-greetd.sh
+	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 
