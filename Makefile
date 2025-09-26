@@ -15,8 +15,8 @@ export BOOT_LABEL
 export ROOT_LABEL
 
 # ----- Wi-Fi (edit once here; inherited by seeding scripts) -----
-WIFI_SSID  ?=
-WIFI_PASS  ?=
+WIFI_SSID  ?=Hangout
+WIFI_PASS  ?=gulfshores
 export WIFI_SSID
 export WIFI_PASS
 
