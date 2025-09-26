@@ -207,3 +207,22 @@ seed-all: ensure-mounted ## Aggregate: Layer1 + Layer2 + Layer2.5
 	@echo "[seed-all] step 4/4: layer2.5 (greetd/tuigreet)"
 	$(MAKE) seed-layer2.5-greetd
 	@echo "[seed-all] done"
+
+# -------------------- Layer 1 (first boot) --------------------
+.PHONY: seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto seed-layer1-all
+
+seed-layer1-disable-firstboot: ensure-mounted ## Layer1: disable any OEM first-boot unit on target
+	@echo "[layer1] disable-firstboot"
+	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-disable-firstboot.sh
+
+seed-layer1-service: ensure-mounted ## Layer1: install/enable our first-boot service on target
+	@echo "[layer1] seed-first-boot-service"
+	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-first-boot-service.sh
+
+seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
+	@echo "[layer1] layer1-auto"
+	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-auto.sh
+
+seed-layer1-all: seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
+	@echo "[layer1] done"
+# --------------------------------------------------------------
