@@ -35,46 +35,8 @@ install -D -m 0644 tools/payloads/etc-systemd-system-greetd.service.d-tty.conf \
   "$ROOT/etc/systemd/system/greetd.service.d/tty.conf"
 
 # On-boot installer: greetd/seatd, groups, (optional) tuigreet
-install -D -m 0755 /dev/stdin "$ROOT/usr/local/sbin/sysclone-layer2.5-greetd-install.sh" <<'EOSH'
-#!/usr/bin/env bash
-set -euo pipefail
-echo "[layer2.5] installing greetd/seatd + configuring groups"
-
-PAC=${PAC:-/usr/bin/pacman}
-# core bits
-$PAC -Sy --noconfirm --needed seatd greetd || true
-# greeters (both ok to “fail” if not in repo)
-$PAC -Sy --noconfirm --needed greetd-tuigreet || true
-$PAC -Sy --noconfirm --needed agreety || true
-
-# seatd running
-systemctl enable --now seatd.service || true
-
-# groups for greeter
-id greeter >/dev/null 2>&1 || useradd -r -M -s /bin/bash greeter || true
-usermod -aG video,input greeter || true
-getent group seat >/dev/null 2>&1 && usermod -aG seat greeter || true
-
-# sway session file (ensure exists)
-install -D -m 0644 /usr/share/wayland-sessions/sway.desktop \
-  /usr/share/wayland-sessions/sway.desktop 2>/dev/null || true
-
-# greetd drop-in already staged by seed; just enable greetd
-systemctl enable greetd.service || true
-
-# prefer tuigreet if present; otherwise agreety (wrapper handles flags)
-if command -v tuigreet >/dev/null 2>&1; then
-  sed -i 's#^command = .*#command = "/usr/local/bin/greetd-launcher"#' /etc/greetd/config.toml || true
-else
-  sed -i 's#^command = .*#command = "/usr/bin/agreety --cmd /usr/local/bin/start-sway"#' /etc/greetd/config.toml || true
-fi
-
-# ensure start-sway exists and is executable
-install -D -m 0755 /usr/local/bin/start-sway /usr/local/bin/start-sway 2>/dev/null || true
-chmod 0755 /usr/local/bin/start-sway || true
-
-echo "[layer2.5] greetd/seatd configured"
-EOSH
+install -D -m 0755 tools/payloads/usr-local-sbin/sysclone-layer2.5-greetd-install.sh \
+  "$ROOT/usr/local/sbin/sysclone-layer2.5-greetd-install.sh"
 
 # oneshot service to run the script on first boot
 install -D -m 0644 /dev/stdin "$ROOT/etc/systemd/system/sysclone-layer2.5-greetd-install.service" <<'EOSVC'
