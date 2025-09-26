@@ -38,3 +38,14 @@ sudo ln -sf ../sysclone-first-boot.service "$ROOT_MOUNT/etc/systemd/system/multi
 sudo umount "$ROOT_MOUNT" || true
 [[ -e "$BOOT_PART" ]] && sudo umount "$BOOT_MOUNT" || true
 log "[install] done"
+
+# --- write /etc/sysclone/firstboot.env for first-boot ---
+install -d -m 0755 "$ROOT_MNT/etc/sysclone"
+cat > "$ROOT_MNT/etc/sysclone/firstboot.env" <<EOV
+WIFI_SSID=${WIFI_SSID:-}
+WIFI_PASS=${WIFI_PASS:-}
+USERNAME=${USERNAME:-}
+USERPASS=${USERPASS:-}
+EOV
+chmod 0640 "$ROOT_MNT/etc/sysclone/firstboot.env" || true
+# --------------------------------------------------------
