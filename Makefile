@@ -189,3 +189,8 @@ show-stamps: ensure-mounted ## List all stamp files under ROOT_MNT/var/lib/syscl
 	else \
 	  echo "[stamps] directory missing: $$DIR"; \
 	fi
+
+# ---------------- Layer 2.5 maintenance ----------------
+clear-layer2.5-stamps: ensure-mounted ## Clear L2.5 greetd stamp on target rootfs
+	@echo "[clear:l2.5] removing greetd stamp"
+	sudo rm -f $(ROOT_MNT)/var/lib/sysclone/.layer2.5-greetd-installed
