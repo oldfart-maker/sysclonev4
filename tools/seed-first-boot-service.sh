@@ -56,7 +56,7 @@ sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
 
 # ensure rootfs path also resolves (service may call /usr/local/sbin/sysclone-first-boot.sh)
 sudo install -d -m 0755 "$ROOT_MOUNT/usr/local/sbin"
-sudo ln -sf /boot/sysclone-first-boot.sh \
+sudo install -D -m 0755 "$SRC_WIFI" "$ROOT_MNT/usr/local/sbin/sysclone-first-boot.sh"
   "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
 
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
