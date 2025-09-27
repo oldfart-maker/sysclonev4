@@ -6,7 +6,7 @@ ROOT_MNT="${ROOT_MNT:-/mnt/sysclone-root}"
 
 unmount_if() {
   local mp="$1"
-  if findmnt -rn -T "$mp" >/dev/null 2>&1; then
+  if mountpoint -q "$mp" >/dev/null 2>&1; then
     sudo umount "$mp"
   fi
 }

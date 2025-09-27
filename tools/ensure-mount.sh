@@ -81,8 +81,8 @@ sudo mkdir -p "$BOOT_MNT" "$ROOT_MNT"
 
 check_mount_matches() {
   local mp="$1" dev="$2"
-  if findmnt -rn -T "$mp" >/dev/null 2>&1; then
-    local src; src="$(findmnt -rn -T "$mp" -o SOURCE)"
+  if mountpoint -q "$mp" >/dev/null 2>&1; then
+    local src; src="$(mountpoint -q "$mp" -o SOURCE)"
     [ "$src" = "$dev" ] || { echo "ERROR: $mp already mounted from $src (expected $dev)"; exit 6; }
     return 0
   fi
