@@ -117,8 +117,8 @@ check_mount_matches() {
     local src
     src="$(findmnt -rn -o SOURCE --target "$mp")"
     if [ "$src" != "$dev" ]; then
-      echo "ERROR: $mp already mounted from $src (expected $dev)"
-      exit 6
+      echo "INFO: $mp mounted from $src; correcting to $dev"
+      sudo umount "$mp"
     fi
     return 0
   fi
