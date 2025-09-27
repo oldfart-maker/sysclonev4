@@ -32,16 +32,16 @@ autodetect_device() {
     else continue; fi
 
     local tmpb tmpr; tmpb="$(mktemp -d)"; tmpr="$(mktemp -d)"
-    if mount -t vfat "$bootpart" "$tmpb" 2>/dev/null; then
+    if sudo mount -t vfat "$bootpart" "$tmpb" 2>/dev/null; then
       if [ -f "$tmpb/config.txt" ] || [ -f "$tmpb/boot/config.txt" ]; then
-        if mount "$rootpart" "$tmpr" 2>/dev/null; then
+        if sudo mount "$rootpart" "$tmpr" 2>/dev/null; then
           if [ -f "$tmpr/etc/os-release" ] && grep -qi 'arch' "$tmpr/etc/os-release"; then
             cands+=("$d:$bootpart:$rootpart")
           fi
-          umount "$tmpr" || true
+          sudo umount "$tmpr" || true
         fi
       fi
-      umount "$tmpb" || true
+      sudo umount "$tmpb" || true
     fi
     rmdir "$tmpb" "$tmpr" 2>/dev/null || true
   done
@@ -91,7 +91,7 @@ check_mount_matches() {
 
 # Mount boot (no bind-mounts)
 if ! check_mount_matches "$BOOT_MNT" "$P1"; then
-  if ! sudo mount -t vfat "$P1" "$BOOT_MNT" 2>/dev/null; then
+  if ! sudo sudo mount -t vfat "$P1" "$BOOT_MNT" 2>/dev/null; then
     sudo mount "$P1" "$BOOT_MNT"
   fi
 fi

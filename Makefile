@@ -102,8 +102,13 @@ seed-layer2-wayland: ensure-mounted ## Wayland/wlroots core + pipewire stack + p
 
 seed-layer2-sway: ensure-mounted ## Sway + minimal config + start-sway wrapper
 	bash seeds/layer2/seed-sway.sh
-
 # ---------------- End Layer 2 block ----------------
+
+# ---------------- Layer 2.5: (DM) ----------------
+seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
+	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
+# ---------------- End Layer 2 block ----------------
+
 
 # ---------- Mount helpers for seeding (idempotent) ----------
 # Only define ROOT_MNT if not already set elsewhere in your Makefile
@@ -112,39 +117,9 @@ ROOT_MNT ?= /mnt/sysclone-root
 .PHONY: ensure-mounted ensure-unmounted
 
 ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
-	@set -euo pipefail; \
-	ROOT_DEV=$$(blkid -L "$(ROOT_LABEL)" || true); \
-	BOOT_DEV=$$(blkid -L "$(BOOT_LABEL)" || true); \
-	if [ -z "$$ROOT_DEV" ]; then echo "[ensure-mounted] Missing ROOT_LABEL=$(ROOT_LABEL)" >&2; exit 1; fi; \
-	if [ -z "$$BOOT_DEV" ]; then echo "[ensure-mounted] Missing BOOT_LABEL=$(BOOT_LABEL)" >&2; exit 1; fi; \
-	sudo mkdir -p "$(ROOT_MNT)"; \
-	if ! findmnt -rn -S "$$ROOT_DEV" >/dev/null; then \
-	  echo "[ensure-mounted] mount $$ROOT_DEV -> $(ROOT_MNT)"; \
-	  sudo mount "$$ROOT_DEV" "$(ROOT_MNT)"; \
-	fi; \
-	sudo mkdir -p "$(ROOT_MNT)/boot"; \
-	if ! findmnt -rn -S "$$BOOT_DEV" >/dev/null; then \
-	  echo "[ensure-mounted] mount $$BOOT_DEV -> $(ROOT_MNT)/boot"; \
-	  sudo mount "$$BOOT_DEV" "$(ROOT_MNT)/boot"; \
-	fi; \
-	echo "[ensure-mounted] ROOT=$(ROOT_MNT) BOOT=$(ROOT_MNT)/boot ready"
-
-ensure-unmounted:
-
-	@set -euo pipefail; \
-	ROOT_MNT="$(ROOT_MNT)"; \
-	BOOT_MNT="$$ROOT_MNT/boot"; \
-	echo "[ensure-unmounted] checking $$BOOT_MNT and $$ROOT_MNT"; \
-	if findmnt -rn "$$BOOT_MNT" >/dev/null 2>&1; then \
-	  echo "[ensure-unmounted] umount $$BOOT_MNT"; sudo umount "$$BOOT_MNT" || true; \
-	else echo "[ensure-unmounted] $$BOOT_MNT not mounted; skip"; fi; \
-	if findmnt -rn "$$ROOT_MNT" >/dev/null 2>&1; then \
-	  echo "[ensure-unmounted] umount $$ROOT_MNT"; sudo umount "$$ROOT_MNT" || true; \
-	else echo "[ensure-unmounted] $$ROOT_MNT not mounted; skip"; fi; \
-	echo "[ensure-unmounted] done"
-
-seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
-	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
+	tools/ensure-mount.sh
+ensure-unmounted: ## Unmount ROOT/BOOT by label if mounted
+	tools/ensure-umount.sh
 
 # -------------------- Layer 1 (first boot) --------------------
 .PHONY: seed-layer1-disable-first-boot seed-layer1-first-boot-service
