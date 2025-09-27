@@ -25,20 +25,8 @@ Workflow - Layer1 (Foundation)
 * make seed-layer1-disable-first-boot
 * make seed-layer1-first-boot-service
 * make ensure-unmounted
-* Veryify Card
-# these must exist:
-sudo ls -l /mnt/sysclone-root/etc/systemd/system/sysclone-first-boot.service
-sudo ls -l /mnt/sysclone-root/usr/local/lib/sysclone/first-boot-provision.sh
-sudo ls -l /mnt/sysclone-root/etc/sysclone/firstboot.env
-sudo ls -l /mnt/sysclone-root/etc/systemd/system/multi-user.target.wants/sysclone-first-boot.service
 
-# BOOT script must be present:
-sudo ls -l /mnt/sysclone-root/boot/sysclone-first-boot.sh  \
-  || sudo ls -l /mnt/sysclone-boot/sysclone-first-boot.sh
-
-# env must be populated (not placeholders):
-sudo sed -n '1,20p' /mnt/sysclone-root/etc/sysclone/firstboot.env
-*******
+**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
 Workflow - Layer2 (Wayland)
 - make seed-layer2-wayland
 * make seed-layer2-sway
