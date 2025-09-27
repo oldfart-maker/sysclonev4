@@ -16,6 +16,21 @@ WIFI_PASS="${WIFI_PASS:-}"
 USERNAME="${USERNAME:-username}"
 USERPASS="${USERPASS:-username}"
 
+# ----- choose Wi-Fi first-boot script from repo (set -u safe) -----
+# Prefer new name, fall back to legacy. Allow caller override via SRC_WIFI.
+if [[ -z "${SRC_WIFI:-}" ]]; then
+  if [[ -f "seeds/layer1/first-boot-wifi.sh" ]]; then
+    SRC_WIFI="seeds/layer1/first-boot-wifi.sh"
+  elif [[ -f "seeds/layer1/first-boot.sh" ]]; then
+    SRC_WIFI="seeds/layer1/first-boot.sh"
+  else
+    log "ERROR: missing seeds/layer1/first-boot-wifi.sh (or first-boot.sh)"
+    exit 2
+  fi
+fi
+log "using Wi-Fi script: $SRC_WIFI"
+
+
 # ----- resolve partitions by DEVICE or by-label -----
 if [[ -n "$DEVICE" ]]; then
   if [[ "$DEVICE" =~ (mmcblk|nvme) ]]; then
