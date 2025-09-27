@@ -64,16 +64,6 @@ sd-write:  ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFI
 
 flash-all: img-unpack sd-write  ## img-download + img-unpack + sd-write
 
-# -------- Seeding --------
-seed-layer1:  ## Auto-mount, seed, unmount (uses WIFI_* from Makefile)
-	@./tools/seed-layer1-auto.sh
-
-seed-first-boot-service:  ## Seed first-boot systemd service into ROOT and enable (runs once)
-	@./tools/seed-first-boot-service.sh
-
-seed-disable-firstboot:  ## Disable Manjaro/OEM first-boot wizard on ROOT (by-label if exported)
-	@./tools/seed-disable-firstboot.sh
-
 # -------- Versioning --------
 tag:  ## Create annotated git tag: make tag VERSION=vX.Y.Z
 	@[ -n "$(VERSION)" ] || { echo "Set VERSION=vX.Y.Z"; exit 2; }
@@ -112,9 +102,6 @@ seed-layer2-wayland: ensure-mounted ## Wayland/wlroots core + pipewire stack + p
 
 seed-layer2-sway: ensure-mounted ## Sway + minimal config + start-sway wrapper
 	bash seeds/layer2/seed-sway.sh
-
-seed-layer2-all: seed-layer2-wayland seed-layer2-sway ## Layer 2 full (without DM)
-
 
 # ---------------- End Layer 2 block ----------------
 
@@ -155,108 +142,43 @@ ensure-unmounted:
 	  echo "[ensure-unmounted] umount $$ROOT_MNT"; sudo umount "$$ROOT_MNT" || true; \
 	else echo "[ensure-unmounted] $$ROOT_MNT not mounted; skip"; fi; \
 	echo "[ensure-unmounted] done"
-# Always clear one-shot stamps so Layer 2/2.5 reruns on next boot
-.PHONY: zap-layer-stamps
-.PHONY: seed-layer2-all-fresh
-seed-layer2-all-fresh: ensure-mounted zap-layer-stamps seed-layer2-all ensure-unmounted ## Fresh L2 seed (clears stamps first)
-	@true
 
 seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
 	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 
-.PHONY: seed-all
-
-# Unified seeding pipeline:
-#  1) disable first-boot wizard
-#  2) run Layer 1 auto seed
-#  3) install/enable first-boot service
-#  4) Layer 2 (Wayland + Sway)
-#  5) Layer 2.5 (greetd/tuigreet)
-#
-# Notes:
-#  - We DO NOT zap stamps here (use your existing zap target if you want a fresh boot)
-#  - We run scripts only if they exist/executable, so this stays portable
-#  - ROOT_MNT is passed through sudo so scripts can write to the mounted card
-seed-all: ensure-mounted ## Aggregate: Layer1 + Layer2 + Layer2.5
-	@echo "[seed-all] step 1/4: layer1 (disable wizard)"
-	$(MAKE) seed-layer1-disable-firstboot
-	@echo "[seed-all] step 2/4: layer1 (payload + service)"
-	$(MAKE) seed-layer1-auto
-	$(MAKE) seed-layer1-service
-	@echo "[seed-all] step 3/4: layer2 (Wayland + Sway)"
-	$(MAKE) seed-layer2-all
-	@echo "[seed-all] step 4/4: layer2.5 (greetd/tuigreet)"
-	$(MAKE) seed-layer2.5-greetd
-	@echo "[seed-all] done"
-
 # -------------------- Layer 1 (first boot) --------------------
-.PHONY: seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto seed-layer1-all
+.PHONY: seed-layer1-disable-first-boot seed-layer1-first-boot-service
 
-seed-layer1-disable-firstboot: ensure-mounted ## Layer1: disable any OEM first-boot unit on target
+seed-layer1-disable-first-boot: ensure-mounted ## Layer1: disable any OEM first-boot unit on target
 	@echo "[layer1] disable-firstboot"
 	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-disable-firstboot.sh
 
-seed-layer1-service: ensure-mounted ## Layer1: install/enable our first-boot service on target
+seed-layer1-first-boot-service: ensure-mounted ## Layer1: install/enable our first-boot service on target
 	@echo "[layer1] seed-first-boot-service"
 	sudo env ROOT_MNT="$(ROOT_MNT)" sudo env ROOT_MNT="$(ROOT_MNT)" WIFI_SSID="$(WIFI_SSID)" WIFI_PASS="$(WIFI_PASS)" USERNAME="$(USERNAME)" USERPASS="$(USERPASS)" bash tools/seed-first-boot-service.sh
 
-seed-layer1-auto: ensure-mounted ## Layer1: place first-boot scripts/payloads
-	@echo "[layer1] layer1-auto"
-	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-auto.sh
 
-seed-layer1-all: ensure-mounted clear-layer1-stamps ensure-mounted clear-layer1-stamps seed-layer1-disable-firstboot seed-layer1-service seed-layer1-auto ## Layer1: all steps
-	@echo "[layer1] done"
-# --------------------------------------------------------------
-
-.PHONY: clear-layer1-stamps clear-layer2-stamps clear-all-stamps \
-        clear-layer-stamps zap-layer-stamps
+.PHONY: clear-layer1-stamps clear-layer2-stamps clear-all-stamps
 
 ## Clear Layer 1 first-boot stamps in $(ROOT_MNT)
-clear-layer1-stamps:
+clear-layer1-stamps: ## Clear Layer 1 first-boot stamps in $(ROOT_MNT)
 	@echo "[clear-layer1-stamps] at $(ROOT_MNT)/var/lib/sysclone"
 	@sudo rm -f "$(ROOT_MNT)/var/lib/sysclone/first-boot.done" \
 	            "$(ROOT_MNT)/var/lib/sysclone/manjaro-firstboot-disabled" 2>/dev/null || true
 	@echo "[clear-layer1-stamps] done"
 
-## Clear Layer 2 stamps in $(ROOT_MNT)
-clear-layer2-stamps:
+
+clear-layer2-stamps: ## Clear Layer 2 stamps in $(ROOT_MNT)
 	@echo "[clear-layer2-stamps] at $(ROOT_MNT)/var/lib/sysclone"
 	@sudo rm -rf "$(ROOT_MNT)/var/lib/sysclone/layer2" 2>/dev/null || true
 	@sudo find "$(ROOT_MNT)/var/lib/sysclone" -maxdepth 1 -type f -name 'layer2*.stamp' -exec rm -f {} + 2>/dev/null || true
 	@echo "[clear-layer2-stamps] done"
 
-## Clear all sysclone stamps in $(ROOT_MNT)
-clear-all-stamps: clear-layer1-stamps clear-layer2-stamps
 
-# ---- Back-compat aliases (do not duplicate logic) ----
-clear-layer-stamps: clear-layer2-stamps
-zap-layer-stamps:   clear-all-stamps
+clear-all-stamps: clear-layer1-stamps clear-layer2-stamps ## Clear all sysclone stamps in $(ROOT_MNT)
 
 # ---- Check the status of layer stamps ---
 .PHONY: check-stamps show-stamps
-
-# check-stamps: verify presence of one or more stamp files under ROOT_MNT/var/lib/sysclone.
-# Usage:
-#   make check-stamps                  # checks common stamps
-#   make check-stamps STAMP=first-boot.done
-check-stamps: ensure-mounted ## Check for sysclone stamps (use STAMP=<name> to check a specific one)
-	@DIR="$(ROOT_MNT)/var/lib/sysclone"; \
-	if [ ! -d "$$DIR" ]; then \
-	  echo "[stamp] directory missing: $$DIR"; exit 0; \
-	fi; \
-	if [ -n "$(STAMP)" ]; then \
-	  if sudo test -e "$$DIR/$(STAMP)"; then \
-	    echo "[stamp] present: $$DIR/$(STAMP)"; \
-	  else \
-	    echo "[stamp] MISSING: $$DIR/$(STAMP)"; \
-	  fi; \
-	else \
-	  found=0; \
-	  for f in first-boot.done manjaro-firstboot-disabled layer2.5-greetd-installed; do \
-	    if sudo test -e "$$DIR/$$f"; then echo "[stamp] present: $$DIR/$$f"; found=1; fi; \
-	  done; \
-	  if [ "$$found" = 0 ]; then echo "[stamp] none of the known stamps found in $$DIR"; fi; \
-	fi
 
 show-stamps: ensure-mounted ## List all stamp files under ROOT_MNT/var/lib/sysclone
 	@DIR="$(ROOT_MNT)/var/lib/sysclone"; \
@@ -266,7 +188,3 @@ show-stamps: ensure-mounted ## List all stamp files under ROOT_MNT/var/lib/syscl
 	else \
 	  echo "[stamps] directory missing: $$DIR"; \
 	fi
-
-.PHONY: seed-layer-all
-seed-layer-all: seed-all
-	@true

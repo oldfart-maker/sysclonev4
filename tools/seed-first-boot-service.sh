@@ -1,56 +1,81 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-log(){ echo "$@"; }
+log(){ [[ "${QUIET:-0}" = "1" ]] || echo "[install:l1] $*"; }
 
+# ----- inputs / fallbacks -----
 BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
 ROOT_MOUNT="${ROOT_MOUNT:-/mnt/sysclone-root}"
 BOOT_LABEL="${BOOT_LABEL:-BOOT_MNJRO}"
 ROOT_LABEL="${ROOT_LABEL:-ROOT_MNJRO}"
+DEVICE="${DEVICE:-}"
 
-# Resolve partitions by label (override with DEVICE if passed by your Makefile)
-if [[ -n "${DEVICE:-}" ]]; then
-  if [[ "$DEVICE" =~ mmcblk|nvme ]]; then BOOT_PART="${DEVICE}p1"; ROOT_PART="${DEVICE}p2"; else BOOT_PART="${DEVICE}1"; ROOT_PART="${DEVICE}2"; fi
+# allow values from Makefile env or tools/.env
+if [[ -f "./tools/.env" ]]; then . "./tools/.env"; fi
+WIFI_SSID="${WIFI_SSID:-}"
+WIFI_PASS="${WIFI_PASS:-}"
+USERNAME="${USERNAME:-username}"
+USERPASS="${USERPASS:-username}"
+
+# ----- resolve partitions by DEVICE or by-label -----
+if [[ -n "$DEVICE" ]]; then
+  if [[ "$DEVICE" =~ (mmcblk|nvme) ]]; then
+    BOOT_PART="${DEVICE}p1"; ROOT_PART="${DEVICE}p2"
+  else
+    BOOT_PART="${DEVICE}1";  ROOT_PART="${DEVICE}2"
+  fi
 else
   BOOT_PART="/dev/disk/by-label/${BOOT_LABEL}"
   ROOT_PART="/dev/disk/by-label/${ROOT_LABEL}"
 fi
 
+# ----- mount (idempotent) -----
 sudo mkdir -p "$BOOT_MOUNT" "$ROOT_MOUNT"
-[[ -e "$BOOT_PART" ]] && sudo mount "$BOOT_PART" "$BOOT_MOUNT" 2>/dev/null || true
-sudo mount "$ROOT_PART" "$ROOT_MOUNT"
+if ! mountpoint -q "$ROOT_MOUNT"; then sudo mount "$ROOT_PART" "$ROOT_MOUNT"; fi
+if [[ -e "$BOOT_PART" ]] && ! mountpoint -q "$BOOT_MOUNT"; then sudo mount "$BOOT_PART" "$BOOT_MOUNT" || true; fi
 
-log "[install] BOOT=${BOOT_PART:-N/A} mounted at $BOOT_MOUNT"
-log "[install] ROOT=$ROOT_MOUNT mounted at $ROOT_MOUNT"
+log "BOOT=${BOOT_PART:-N/A} mounted at $BOOT_MOUNT"
+log "ROOT=$ROOT_PART mounted at $ROOT_MOUNT"
 
-# Payload + unit
-sudo install -Dm755 seeds/layer1/first-boot-provision.sh "$ROOT_MOUNT/usr/local/lib/sysclone/first-boot-provision.sh"
-sudo install -Dm644 seeds/layer1/first-boot.service        "$ROOT_MOUNT/etc/systemd/system/sysclone-first-boot.service"
+# ----- install payloads to ROOT -----
+sudo install -Dm755 seeds/layer1/first-boot-provision.sh \
+  "$ROOT_MOUNT/usr/local/lib/sysclone/first-boot-provision.sh"
+sudo install -Dm644 seeds/layer1/first-boot.service \
+  "$ROOT_MOUNT/etc/systemd/system/sysclone-first-boot.service"
 
-# If a firstboot script was staged on BOOT, copy it into ROOT
-if [[ -e "$BOOT_PART" && -f "$BOOT_MOUNT/sysclone-first-boot.sh" ]]; then
-  sudo install -Dm755 "$BOOT_MOUNT/sysclone-first-boot.sh" "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
-fi
-
-# --- write /etc/sysclone/firstboot.env for first-boot (from Makefile env or ./tools/.env) ---
-# shell defaults allow Makefile to pass WIFI_SSID/WIFI_PASS/USERNAME/USERPASS,
-# otherwise we also dot-source ./tools/.env if present.
-if [[ -f "./tools/.env" ]]; then . "./tools/.env"; fi
-
+# ----- write /etc/sysclone/firstboot.env on ROOT (quoted) -----
 sudo install -d -m 0755 "$ROOT_MOUNT/etc/sysclone"
 sudo tee "$ROOT_MOUNT/etc/sysclone/firstboot.env" >/dev/null <<EOF
-WIFI_SSID='${WIFI_SSID:-}'
-WIFI_PASS='${WIFI_PASS:-}'
-USERNAME='${USERNAME:-username}'
-USERPASS='${USERPASS:-username}'
+WIFI_SSID='${WIFI_SSID}'
+WIFI_PASS='${WIFI_PASS}'
+USERNAME='${USERNAME}'
+USERPASS='${USERPASS}'
 EOF
 sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
-# ---------------------------------------------------------------------------
 
-# Enable the unit in the target
+# ----- render /boot/sysclone-first-boot.sh (inject wifi vars at top) -----
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+head -n1 seeds/layer1/first-boot.sh > "$tmp"
+printf 'WIFI_SSID=%q\nWIFI_PASS=%q\n' "$WIFI_SSID" "$WIFI_PASS" >> "$tmp"
+tail -n +2 seeds/layer1/first-boot.sh >> "$tmp"
+
+if [[ -e "$BOOT_PART" ]]; then
+  sudo cp --remove-destination --no-preserve=mode,ownership,timestamps \
+    "$tmp" "$BOOT_MOUNT/sysclone-first-boot.sh"
+  sudo chmod 0755 "$BOOT_MOUNT/sysclone-first-boot.sh" || true
+  sync
+  log "wrote BOOT:/sysclone-first-boot.sh (with SSID=${WIFI_SSID:-<empty>})"
+else
+  log "WARN: BOOT partition not present; skipped copying sysclone-first-boot.sh"
+fi
+
+# ----- enable unit on ROOT -----
 sudo mkdir -p "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants"
-sudo ln -sf ../sysclone-first-boot.service "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/sysclone-first-boot.service"
+sudo ln -sf ../sysclone-first-boot.service \
+  "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/sysclone-first-boot.service"
 
-# Unmount
+log "unit enabled; payloads staged"
+
+# ----- unmount (idempotent) -----
 sudo umount "$ROOT_MOUNT" || true
-[[ -e "$BOOT_PART" ]] && sudo umount "$BOOT_MOUNT" || true
-log "[install] done"
+if [[ -e "$BOOT_PART" ]]; then sudo umount "$BOOT_MOUNT" || true; fi
+log "done"
