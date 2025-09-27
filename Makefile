@@ -194,3 +194,32 @@ show-stamps: ensure-mounted ## List all stamp files under ROOT_MNT/var/lib/syscl
 clear-layer2.5-stamps: ensure-mounted ## Clear L2.5 greetd stamp on target rootfs
 	@echo "[clear:l2.5] removing greetd stamp"
 	sudo rm -f $(ROOT_MNT)/var/lib/sysclone/.layer2.5-greetd-installed
+
+# ---------------- Layer 1: aggregate ----------------
+seed-layer1-all: ensure-mounted ## Layer1: disable first-boot + install first-boot service; leaves card unmounted
+	@set -euo pipefail; \
+	  $(MAKE) seed-layer1-disable-first-boot; \
+	  $(MAKE) seed-layer1-first-boot-service; \
+	  $(MAKE) ensure-unmounted; \
+	  echo "[layer1] aggregate done"
+
+.PHONY: seed-layer1-all
+
+# ---------------- Layer 2: aggregate ----------------
+seed-layer2-all: ensure-mounted ## Layer2: wayland providers + sway; leaves card unmounted
+	@set -euo pipefail; \
+	  $(MAKE) seed-layer2-wayland; \
+	  $(MAKE) seed-layer2-sway; \
+	  $(MAKE) ensure-unmounted; \
+	  echo "[layer2] aggregate done"
+
+.PHONY: seed-layer2-all
+
+# ---------------- Layer 2.5: aggregate ----------------
+seed-layer2.5-all: ensure-mounted ## Layer2.5: greetd/tuigreet; leaves card unmounted
+	@set -euo pipefail; \
+	  $(MAKE) seed-layer2.5-greetd; \
+	  $(MAKE) ensure-unmounted; \
+	  echo "[layer2.5] aggregate done"
+
+.PHONY: seed-layer2.5-all
