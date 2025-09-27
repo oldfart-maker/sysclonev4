@@ -105,12 +105,7 @@ mkdir -p .cache/sysclonev4
 printf "%s\n" "$DEVICE" > .cache/sysclonev4/last-device
 
 echo "Mounted:"
-findmnt -rno TARGET,SOURCE "$BOOT_MNT" "$ROOT_MNT"
-
-exit 0
-
-# Summary (non-fatal)
-set +e
-findmnt -rno TARGET,SOURCE "$BOOT_MNT" "$ROOT_MNT" || true
-set -e
+{
+  findmnt -rno TARGET,SOURCE "$BOOT_MNT" "$ROOT_MNT"
+} || true
 exit 0

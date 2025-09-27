@@ -119,7 +119,7 @@ ROOT_MNT ?= /mnt/sysclone-root
 ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
 	@bash tools/ensure-mount.sh
 ensure-unmounted: ## Unmount ROOT/BOOT by label if mounted
-	tools/ensure-umount.sh
+	@bash tools/ensure-umount.sh
 
 # -------------------- Layer 1 (first boot) --------------------
 .PHONY: seed-layer1-disable-first-boot seed-layer1-first-boot-service
