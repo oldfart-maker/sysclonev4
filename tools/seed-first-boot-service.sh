@@ -53,6 +53,12 @@ EOF
 sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
 
 # ----- render /boot/sysclone-first-boot.sh (inject wifi vars at top) -----
+
+# ensure rootfs path also resolves (service may call /usr/local/sbin/sysclone-first-boot.sh)
+sudo install -d -m 0755 "$ROOT_MOUNT/usr/local/sbin"
+sudo ln -sf /boot/sysclone-first-boot.sh \
+  "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
+
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
 head -n1 seeds/layer1/first-boot.sh > "$tmp"
 printf 'WIFI_SSID=%q\nWIFI_PASS=%q\n' "$WIFI_SSID" "$WIFI_PASS" >> "$tmp"
