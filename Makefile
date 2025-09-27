@@ -20,10 +20,36 @@ WIFI_PASS  ?=gulfshores
 export WIFI_SSID
 export WIFI_PASS
 
+# -------- Mount config (sysclonev4 helpers) --------
+ROOT_MNT ?= /mnt/sysclone-root
+BOOT_MNT ?= /mnt/sysclone-boot
+
+export ROOT_MNT BOOT_MNT DEVICE
+
+# Optional: convenience to "remember" a device once
+set-device: ## Set/remember DEVICE=/dev/sdX for later runs (aggregates included)
+	@[ -n "$(DEVICE)" ] || { echo "Set DEVICE=/dev/SDX, e.g. make DEVICE=/dev/sdu set-device"; exit 2; }
+	@mkdir -p .cache/sysclonev4
+	@echo "$(DEVICE)" > .cache/sysclonev4/last-device
+	@echo "Saved DEVICE = $(DEVICE)"
+
+
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.xz=)
 
 DEVICE     ?=
+# --- sysclonev4 mount vars (safe + sticky) ---
+ROOT_MNT ?= /mnt/sysclone-root
+BOOT_MNT ?= /mnt/sysclone-boot
+
+# If DEVICE was not provided, pull it from the cache
+ifeq ($(strip $(DEVICE)),)
+	DEVICE := $(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device)
+endif
+
+export ROOT_MNT BOOT_MNT DEVICE
+# --------------------------------------------
+
 BOOT_MOUNT ?= /run/media/$(USER)/BOOT
 CONFIRM    ?=
 
@@ -119,7 +145,7 @@ ROOT_MNT ?= /mnt/sysclone-root
 ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
 	@bash tools/ensure-mount.sh
 ensure-unmounted: ## Unmount ROOT/BOOT by label if mounted
-	@bash tools/ensure-umount.sh
+	@bash tools/ensure-unmount.sh
 
 # -------------------- Layer 1 (first boot) --------------------
 .PHONY: seed-layer1-disable-first-boot seed-layer1-first-boot-service
