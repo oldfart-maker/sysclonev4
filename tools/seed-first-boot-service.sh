@@ -30,7 +30,6 @@ if [[ -z "${SRC_WIFI:-}" ]]; then
     exit 2
   fi
 fi
-log "using Wi-Fi script: $SRC_WIFI"
 
 
 # ----- resolve partitions by DEVICE or by-label -----
@@ -69,11 +68,9 @@ USERPASS='${USERPASS}'
 EOF
 sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
 
-# ----- render /boot/sysclone-first-boot.sh (inject wifi vars at top) -----
 
 # ensure rootfs path also resolves (service may call /usr/local/sbin/sysclone-first-boot.sh)
 sudo install -d -m 0755 "$ROOT_MOUNT/usr/local/sbin"
-sudo install -D -m 0755 "$SRC_WIFI" "$ROOT_MNT/usr/local/sbin/sysclone-first-boot.sh"
   "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
 
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
