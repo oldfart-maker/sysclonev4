@@ -106,3 +106,5 @@ printf "%s\n" "$DEVICE" > .cache/sysclonev4/last-device
 
 echo "Mounted:"
 findmnt -rno TARGET,SOURCE "$BOOT_MNT" "$ROOT_MNT"
+
+exit 0
