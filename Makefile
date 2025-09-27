@@ -117,7 +117,7 @@ ROOT_MNT ?= /mnt/sysclone-root
 .PHONY: ensure-mounted ensure-unmounted
 
 ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
-	tools/ensure-mount.sh
+	@bash tools/ensure-mount.sh
 ensure-unmounted: ## Unmount ROOT/BOOT by label if mounted
 	tools/ensure-umount.sh
 
