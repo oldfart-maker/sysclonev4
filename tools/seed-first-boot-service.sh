@@ -52,7 +52,6 @@ USERPASS='${USERPASS}'
 EOF
 sudo chmod 0640 "$ROOT_MOUNT/etc/sysclone/firstboot.env" || true
 
-# ----- render /boot/sysclone-first-boot.sh (inject wifi vars at top) -----
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
 head -n1 seeds/layer1/first-boot.sh > "$tmp"
 printf 'WIFI_SSID=%q\nWIFI_PASS=%q\n' "$WIFI_SSID" "$WIFI_PASS" >> "$tmp"
@@ -62,6 +61,8 @@ if [[ -e "$BOOT_PART" ]]; then
   sudo cp --remove-destination --no-preserve=mode,ownership,timestamps \
     "$tmp" "$BOOT_MOUNT/sysclone-first-boot.sh"
   sudo chmod 0755 "$BOOT_MOUNT/sysclone-first-boot.sh" || true
+  # Also install a real copy into the target rootfs where the provisioner expects it.
+  sudo install -D -m 0755 "$tmp" "$ROOT_MOUNT/usr/local/sbin/sysclone-first-boot.sh"
   sync
   log "wrote BOOT:/sysclone-first-boot.sh (with SSID=${WIFI_SSID:-<empty>})"
 else
