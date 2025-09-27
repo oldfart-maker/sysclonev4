@@ -15,6 +15,8 @@ WIFI_SSID="${WIFI_SSID:-}"
 WIFI_PASS="${WIFI_PASS:-}"
 USERNAME="${USERNAME:-username}"
 USERPASS="${USERPASS:-username}"
+export SYSCLONE_SEED_PHASE=1  # prevent accidental execution during seeding
+
 
 # ----- choose Wi-Fi first-boot script from repo (set -u safe) -----
 # Prefer new name, fall back to legacy. Allow caller override via SRC_WIFI.
