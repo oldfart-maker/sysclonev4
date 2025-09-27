@@ -131,7 +131,7 @@ seed-layer2-sway: ensure-mounted ## Sway + minimal config + start-sway wrapper
 # ---------------- End Layer 2 block ----------------
 
 # ---------------- Layer 2.5: (DM) ----------------
-seed-layer2.5-greetd: ensure-mounted clear-layer-stamps ## (Optional) greetd (agreety/tuigreet) login screen
+seed-layer2.5-greetd: ensure-mounted  ## (Optional) greetd (agreety/tuigreet) login screen
 	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 # ---------------- End Layer 2 block ----------------
 
