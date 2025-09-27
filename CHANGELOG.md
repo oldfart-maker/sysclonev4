@@ -1,0 +1,1 @@
+- 2025-09-27: l2.5 first-boot greeter visibility fix; tuigreet shows on first boot.
