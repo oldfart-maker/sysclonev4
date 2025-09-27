@@ -49,3 +49,15 @@ systemctl mask getty@tty2.service || true
 # 7) Success → write stamp last
 install -D -m 0644 /dev/null /var/lib/sysclone/.layer2.5-greetd-installed
 echo "[layer2.5] greetd/seatd configured"
+# -- sysclone-l25-enable-greetd --
+
+systemctl daemon-reload || true
+
+systemctl enable --now greetd.service || true
+
+# optional: avoid VT1 race with getty
+
+systemctl disable --now getty.service 2>/dev/null || true
+
+systemctl mask getty.service 2>/dev/null || true
+
