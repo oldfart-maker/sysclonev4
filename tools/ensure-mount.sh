@@ -109,3 +109,18 @@ echo "Mounted:"
   findmnt -rno TARGET,SOURCE "$BOOT_MNT" "$ROOT_MNT"
 } || true
 exit 0
+
+# --- override: correct mount check using mountpoint + findmnt --target ---
+check_mount_matches() {
+  local mp="$1" dev="$2"
+  if mountpoint -q "$mp"; then
+    local src
+    src="$(findmnt -rn -o SOURCE --target "$mp")"
+    if [ "$src" != "$dev" ]; then
+      echo "ERROR: $mp already mounted from $src (expected $dev)"
+      exit 6
+    fi
+    return 0
+  fi
+  return 1
+}
