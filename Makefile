@@ -198,6 +198,7 @@ clear-layer2.5-stamps: ensure-mounted ## Clear L2.5 greetd stamp on target rootf
 # ---------------- Layer 1: aggregate ----------------
 seed-layer1-all: ensure-mounted ## Layer1: disable first-boot + install first-boot service; leaves card unmounted
 	@set -euo pipefail; \
+	  $(MAKE) clear-layer1-stamps; \
 	  $(MAKE) seed-layer1-disable-first-boot; \
 	  $(MAKE) seed-layer1-first-boot-service; \
 	  $(MAKE) ensure-unmounted; \
@@ -208,6 +209,7 @@ seed-layer1-all: ensure-mounted ## Layer1: disable first-boot + install first-bo
 # ---------------- Layer 2: aggregate ----------------
 seed-layer2-all: ensure-mounted ## Layer2: wayland providers + sway; leaves card unmounted
 	@set -euo pipefail; \
+	  $(MAKE) clear-layer2-stamps; \
 	  $(MAKE) seed-layer2-wayland; \
 	  $(MAKE) seed-layer2-sway; \
 	  $(MAKE) ensure-unmounted; \
@@ -218,6 +220,7 @@ seed-layer2-all: ensure-mounted ## Layer2: wayland providers + sway; leaves card
 # ---------------- Layer 2.5: aggregate ----------------
 seed-layer2.5-all: ensure-mounted ## Layer2.5: greetd/tuigreet; leaves card unmounted
 	@set -euo pipefail; \
+	  $(MAKE) clear-layer2.5-stamps; \
 	  $(MAKE) seed-layer2.5-greetd; \
 	  $(MAKE) ensure-unmounted; \
 	  echo "[layer2.5] aggregate done"
