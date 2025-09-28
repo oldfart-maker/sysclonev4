@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 log(){ echo "[layer1] $*"; }
+## Harden: add parted fallback when growpart is missing, re-read the table,
+## and ensure the service orders Before=sysclone-first-boot.service.
 
 ROOT_MNT="${ROOT_MNT:-/mnt/sysclone-root}"
 
-install -d -m 0755 "$ROOT_MNT/usr/local/sbin" "$ROOT_MNT/etc/systemd/system" "$ROOT_MNT/var/lib/sysclone"
+install -d -m 0755 \
+  "$ROOT_MNT/usr/local/sbin" \
+  "$ROOT_MNT/etc/systemd/system" \
+  "$ROOT_MNT/var/lib/sysclone"
 
 # Installer script that runs on the Pi at first boot
-cat > "$ROOT_MNT/usr/local/sbin/sysclone-expand-rootfs.sh" <<'EOS'
+cat > "$ROOT_MNT/usr/local/sbin/sysclone-expand-rootfs.sh" <<'EOT'
 #!/usr/bin/env bash
 set -euo pipefail
 log(){ echo "[expand-rootfs] $*"; }
@@ -26,14 +31,37 @@ case "$root_src" in
 esac
 
 disk="$(lsblk -no PKNAME "$part" | sed 's/^/\/dev\//')"
+pnum="$(echo "$part" | sed -E 's/.*[^0-9]([0-9]+)$/\1/')"
+[ -n "$pnum" ] || { log "ERROR: could not parse partition number from $part"; exit 1; }
+
 if command -v growpart >/dev/null 2>&1; then
-  log "growing partition: disk=$disk part=$part"
-  # Extract the partition number (digits at end)
-  pnum="$(echo "$part" | sed -E 's/.*[^0-9]([0-9]+)$/\1/')"
+  log "branch=growpart disk=$disk part=$part pnum=$pnum"
   growpart "$disk" "$pnum" || { log "growpart failed"; exit 1; }
 else
-  log "growpart not present; attempting resize2fs only"
+  if command -v parted >/dev/null 2>&1; then
+    log "branch=parted disk=$disk part=$part pnum=$pnum (extend to 100%)"
+    last_end_s="$(parted -s "$disk" unit s print | awk -v pn="$pnum" '$1==pn {gsub("s","",$3); print $3}')"
+    disk_end_s="$(parted -s "$disk" unit s print | awk '/Disk .*:/{gsub("s","",$3); print $3}')"
+    if [ -n "$last_end_s" ] && [ -n "$disk_end_s" ] && [ "$last_end_s" -lt "$disk_end_s" ]; then
+      parted -s "$disk" ---pretend-input-tty <<CMD
+unit %
+print
+resizepart $pnum 100%
+Yes
+print
+CMD
+    else
+      log "partition already at disk end; skipping resizepart"
+    fi
+  else
+    log "ERROR: neither growpart nor parted available; cannot grow partition"
+    exit 1
+  fi
 fi
+
+# Re-read partition table / settle devices before growing FS
+command -v partprobe >/dev/null 2>&1 && partprobe "$disk" || true
+command -v udevadm   >/dev/null 2>&1 && udevadm settle || true
 
 # Finally grow filesystem
 log "running resize2fs on $part"
@@ -41,16 +69,17 @@ resize2fs "$part"
 
 touch "$STAMP"
 log "done"
-EOS
+EOT
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-expand-rootfs.sh"
 
 # Systemd unit (runs early, once)
-cat > "$ROOT_MNT/etc/systemd/system/sysclone-expand-rootfs.service" <<'EOS'
+cat > "$ROOT_MNT/etc/systemd/system/sysclone-expand-rootfs.service" <<'EOT'
 [Unit]
 Description=SysClone: Expand root filesystem to fill device
 DefaultDependencies=no
-After=local-fs.target
-Before=multi-user.target
+After=local-fs.target systemd-udev-settle.service
+# Ensure expansion completes before the main first-boot provisioning
+Before=sysclone-first-boot.service
 ConditionPathExists=!/var/lib/sysclone/.rootfs-expanded
 
 [Service]
@@ -59,7 +88,7 @@ ExecStart=/usr/local/sbin/sysclone-expand-rootfs.sh
 
 [Install]
 WantedBy=multi-user.target
-EOS
+EOT
 
 # Enable the unit
 ln -sf ../sysclone-expand-rootfs.service \
