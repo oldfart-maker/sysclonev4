@@ -200,7 +200,9 @@ seed-layer1-all: ensure-mounted ## Layer1: disable first-boot + install first-bo
 	@set -euo pipefail; \
 	  $(MAKE) clear-layer1-stamps; \
 	  $(MAKE) seed-layer1-disable-first-boot; \
+	  $(MAKE) seed-layer1-expand-rootfs; \
 	  $(MAKE) seed-layer1-first-boot-service; \
+	  $(MAKE) seed-pi-devtools; \
 	  $(MAKE) ensure-unmounted; \
 	  echo "[layer1] aggregate done"
 
@@ -236,8 +238,14 @@ seed-pi-devtools: ensure-mounted ## Install Pi debugging helpers (scpi + pi.mk)
 	@$(MAKE) ensure-unmounted
 .PHONY: seed-pi-devtools
 
-# Layer1: expand rootfs on first boot (enable oneshot unit)
-seed-layer1-expand-rootfs: ensure-mounted ## Stage first-boot rootfs expansion unit/script
-	@sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/layer1/seed-expand-rootfs.sh
-	@$(MAKE) ensure-unmounted
+# Layer1: stage rootfs expansion for first boot (uses helper if present)
+seed-layer1-expand-rootfs: ensure-mounted ## Layer1: stage rootfs grow on first boot
+	@set -euo pipefail; \
+	  if [ -x tools/seed-expand-rootfs.sh ]; then \
+	    echo "[layer1] expand-rootfs via tools/seed-expand-rootfs.sh"; \
+	    sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-expand-rootfs.sh; \
+	  else \
+	    echo "[layer1] WARN: tools/seed-expand-rootfs.sh not found; skipping expansion staging"; \
+	  fi
+
 .PHONY: seed-layer1-expand-rootfs
