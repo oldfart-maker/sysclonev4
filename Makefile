@@ -59,7 +59,7 @@ show-config:  ## Show important variables
 	@echo "CACHE_DIR  = $(CACHE_DIR)"
 	@echo "IMG_XZ     = $(IMG_XZ)"
 	@echo "IMG_RAW    = $(IMG_RAW)"
-	@echo "DEVICE     = $(DEVICE)"
+	@echo "DEVICE     = $((DEVICE_EFFECTIVE))"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "BOOT_LABEL = $(BOOT_LABEL)"
 	@echo "ROOT_LABEL = $(ROOT_LABEL)"
