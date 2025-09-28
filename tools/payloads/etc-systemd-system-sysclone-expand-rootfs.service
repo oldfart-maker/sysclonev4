@@ -1,0 +1,14 @@
+[Unit]
+Description=SysClone: Expand root filesystem on first boot
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=multi-user.target
+ConditionPathExists=!/var/lib/sysclone/.rootfs-expanded
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sysclone-expand-rootfs.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

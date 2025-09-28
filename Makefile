@@ -235,3 +235,9 @@ seed-pi-devtools: ensure-mounted ## Install Pi debugging helpers (scpi + pi.mk)
 	@echo "[pi-devtools] installed: /usr/local/share/sysclone/pi.mk and /usr/local/bin/scpi"
 	@$(MAKE) ensure-unmounted
 .PHONY: seed-pi-devtools
+
+# Layer1: expand rootfs on first boot (enable oneshot unit)
+seed-layer1-expand-rootfs: ensure-mounted ## Stage first-boot rootfs expansion unit/script
+	@sudo env ROOT_MNT="$(ROOT_MNT)" bash seeds/layer1/seed-expand-rootfs.sh
+	@$(MAKE) ensure-unmounted
+.PHONY: seed-layer1-expand-rootfs
