@@ -33,7 +33,6 @@ set-device: ## Set/remember DEVICE=/dev/sdX for later runs (aggregates included)
 	@echo "$(DEVICE)" > .cache/sysclonev4/last-device
 	@echo "Saved DEVICE = $(DEVICE)"
 
-
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.xz=)
 
@@ -135,7 +134,6 @@ seed-layer2.5-greetd: ensure-mounted  ## (Optional) greetd (agreety/tuigreet) lo
 	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 # ---------------- End Layer 2 block ----------------
 
-
 # ---------- Mount helpers for seeding (idempotent) ----------
 # Only define ROOT_MNT if not already set elsewhere in your Makefile
 ROOT_MNT ?= /mnt/sysclone-root
@@ -158,7 +156,6 @@ seed-layer1-first-boot-service: ensure-mounted ## Layer1: install/enable our fir
 	@echo "[layer1] seed-first-boot-service"
 	sudo env ROOT_MNT="$(ROOT_MNT)" sudo env ROOT_MNT="$(ROOT_MNT)" WIFI_SSID="$(WIFI_SSID)" WIFI_PASS="$(WIFI_PASS)" USERNAME="$(USERNAME)" USERPASS="$(USERPASS)" bash tools/seed-first-boot-service.sh
 
-
 .PHONY: clear-layer1-stamps clear-layer2-stamps clear-all-stamps
 
 ## Clear Layer 1 first-boot stamps in $(ROOT_MNT)
@@ -168,13 +165,11 @@ clear-layer1-stamps: ## Clear Layer 1 first-boot stamps in $(ROOT_MNT)
 	            "$(ROOT_MNT)/var/lib/sysclone/manjaro-firstboot-disabled" 2>/dev/null || true
 	@echo "[clear-layer1-stamps] done"
 
-
 clear-layer2-stamps: ## Clear Layer 2 stamps in $(ROOT_MNT)
 	@echo "[clear-layer2-stamps] at $(ROOT_MNT)/var/lib/sysclone"
 	@sudo rm -rf "$(ROOT_MNT)/var/lib/sysclone/layer2" 2>/dev/null || true
 	@sudo find "$(ROOT_MNT)/var/lib/sysclone" -maxdepth 1 -type f -name 'layer2*.stamp' -exec rm -f {} + 2>/dev/null || true
 	@echo "[clear-layer2-stamps] done"
-
 
 clear-all-stamps: clear-layer1-stamps clear-layer2-stamps ## Clear all sysclone stamps in $(ROOT_MNT)
 
@@ -257,3 +252,28 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 	  $(MAKE) ensure-unmounted; \
 	  echo "[boot-visibility] done"
 .PHONY: seed-boot-visibility
+
+
+# --- sysclone host-side rootfs expansion (offline) --------------------------
+DEVICE ?= /dev/mmcblk0
+ROOT_MNT ?= /mnt/sysclone-root
+BOOT_MNT ?= /mnt/sysclone-boot
+
+.PHONY: img-expand-rootfs-offline verify-rootfs-size sd-write+expand
+
+## Expand rootfs offline on the SD card (requires DEVICE=/dev/...)
+img-expand-rootfs-offline: ensure-unmounted
+	@echo "[make] offline expand on $(DEVICE)"
+	DEVICE=$(DEVICE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) sudo tools/host-expand-rootfs.sh
+
+## Convenience: write image then expand offline
+sd-write+expand: sd-write img-expand-rootfs-offline
+
+## Quick check (mounted): shows sizes for sanity
+verify-rootfs-size: ensure-mounted
+	@echo "[make] verify sizes on mounted card"
+	@lsblk -e7 -o NAME,SIZE,TYPE,MOUNTPOINTS | sed -n "1,200p"
+	@df -h | sed -n "1,200p"
+	@echo "[make] .rootfs-expanded stamp:" && ls -l $(ROOT_MNT)/var/lib/sysclone/.rootfs-expanded || true
+# ---------------------------------------------------------------------------
+
