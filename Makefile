@@ -36,6 +36,9 @@ set-device: ## Set/remember DEVICE=/dev/sdX for later runs (aggregates included)
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.xz=)
 
+# Resolve DEVICE from cache if empty (works even if exported empty)
+DEVICE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
+
 
 BOOT_MOUNT ?= /run/media/$(USER)/BOOT
 CONFIRM    ?=
@@ -244,8 +247,6 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 	  echo "[boot-visibility] done"
 .PHONY: seed-boot-visibility
 
-
-# --- sysclone host-side rootfs expansion (offline) --------------------------
 
 # --- sysclone host-side rootfs expansion (offline) --------------------------
 .PHONY: img-expand-rootfs-offline verify-rootfs-size sd-write+expand
