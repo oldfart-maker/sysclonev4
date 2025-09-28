@@ -36,18 +36,6 @@ set-device: ## Set/remember DEVICE=/dev/sdX for later runs (aggregates included)
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.xz=)
 
-DEVICE     ?=
-# --- sysclonev4 mount vars (safe + sticky) ---
-ROOT_MNT ?= /mnt/sysclone-root
-BOOT_MNT ?= /mnt/sysclone-boot
-
-# If DEVICE was not provided, pull it from the cache
-ifeq ($(strip $(DEVICE)),)
-	DEVICE := $(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device)
-endif
-
-export ROOT_MNT BOOT_MNT DEVICE
-# --------------------------------------------
 
 BOOT_MOUNT ?= /run/media/$(USER)/BOOT
 CONFIRM    ?=
@@ -88,6 +76,10 @@ sd-write:  ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFI
 	@sudo dd if="$(IMG_RAW)" of="$(DEVICE)" bs=4M status=progress conv=fsync
 
 flash-all: img-unpack sd-write  ## img-download + img-unpack + sd-write
+
+# Convenience: unpack + write + offline expand (re-uses existing targets/vars)
+flash-all+expand: img-unpack sd-write img-expand-rootfs-offline  ## unpack, write, expand (offline)
+
 
 # -------- Versioning --------
 tag:  ## Create annotated git tag: make tag VERSION=vX.Y.Z
@@ -136,7 +128,6 @@ seed-layer2.5-greetd: ensure-mounted  ## (Optional) greetd (agreety/tuigreet) lo
 
 # ---------- Mount helpers for seeding (idempotent) ----------
 # Only define ROOT_MNT if not already set elsewhere in your Makefile
-ROOT_MNT ?= /mnt/sysclone-root
 
 .PHONY: ensure-mounted ensure-unmounted
 
@@ -255,10 +246,8 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 
 
 # --- sysclone host-side rootfs expansion (offline) --------------------------
-DEVICE ?= /dev/mmcblk0
-ROOT_MNT ?= /mnt/sysclone-root
-BOOT_MNT ?= /mnt/sysclone-boot
 
+# --- sysclone host-side rootfs expansion (offline) --------------------------
 .PHONY: img-expand-rootfs-offline verify-rootfs-size sd-write+expand
 
 ## Expand rootfs offline on the SD card (requires DEVICE=/dev/...)
@@ -276,4 +265,3 @@ verify-rootfs-size: ensure-mounted
 	@df -h | sed -n "1,200p"
 	@echo "[make] .rootfs-expanded stamp:" && ls -l $(ROOT_MNT)/var/lib/sysclone/.rootfs-expanded || true
 # ---------------------------------------------------------------------------
-
