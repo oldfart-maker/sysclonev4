@@ -27,7 +27,7 @@ verify-layer1-install:
 	ls -l /usr/local/sbin/sysclone-first-boot.sh || true
 	echo
 	echo "[pi] firstboot.env (first 20 lines)"
-	sed -n '1,20p' /etc/sysclone/firstboot.env || true
+	sudo sed -n '1,20p' /etc/sysclone/firstboot.env || true
 	echo
 	echo "[pi] L1 journal (this boot)"
 	journalctl -u $(unit_l1) -b --no-pager --no-hostname || true
