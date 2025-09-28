@@ -75,3 +75,34 @@ install -d -m 0755 /var/lib/sysclone
 printf 'ok\n' > /var/lib/sysclone/.layer2-installed
 
 next; log "done"
+
+# --- sysclone:l2 clock + mirrors hardening ------------------------------------
+l2_wait_clock() {
+  # Wait up to 300s for either NTP= yes or a reasonable year (>= 2024)
+  local deadline=$((SECONDS+300))
+  while (( SECONDS < deadline )); do
+    local ntp; ntp="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)"
+    local yr;  yr="$(date -u +%Y 2>/dev/null || echo 1970)"
+    if [[ "$ntp" = "yes" ]] || (( yr >= 2024 )); then
+      echo "[layer2-install] clock ready (ntp=$ntp year=$yr)"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "[layer2-install] WARN: clock not confirmed after wait; proceeding cautiously"
+  return 0
+}
+
+l2_write_fallback_mirrorlist() {
+  cat > /etc/pacman.d/mirrorlist <<'ML'
+##
+## Fallback mirrorlist (sysclone L2)
+##
+
+Server = https://mirror.fcix.net/manjaro/$branch/$repo/$arch
+Server = https://ftp.halifax.rwth-aachen.de/manjaro/$branch/$repo/$arch
+Server = https://ftp.tsukuba.wide.ad.jp/Linux/manjaro/$branch/$repo/$arch
+ML
+  echo "[layer2-install] wrote fallback /etc/pacman.d/mirrorlist"
+}
+# ------------------------------------------------------------------------------
