@@ -29,7 +29,22 @@ log "pre parted print:"
 parted -s "$DEVICE" unit s print || true
 
 # grow partition 2 to 100%
-log "resizing partition 2 to 100%% on $DEVICE"
+log "resizing partition 2 to 100% on $DEVICE"
+if command -v sfdisk >/dev/null 2>&1; then
+  log "using sfdisk to expand partition 2"
+  printf ",,+\n" | sfdisk -N 2 --no-reread --force "$DEVICE"
+elif command -v parted >/dev/null 2>&1; then
+  log "using parted to expand partition 2 (fallback)"
+  parted -s "$DEVICE" ---pretend-input-tty <<CMD || true
+unit %
+print
+resizepart 2 100%
+Yes
+print
+CMD
+else
+  die "no sfdisk/parted available"
+fi
 parted -s "$DEVICE" ---pretend-input-tty <<CMD
 unit %
 print
