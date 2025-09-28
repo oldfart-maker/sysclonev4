@@ -249,3 +249,11 @@ seed-layer1-expand-rootfs: ensure-mounted ## Layer1: stage rootfs grow on first 
 	  fi
 
 .PHONY: seed-layer1-expand-rootfs
+
+# Show boot/service progress on console + write logs to /boot/sysclone-status/
+seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first-boot/L2/L2.5
+	@set -euo pipefail; \
+	  sudo env ROOT_MNT="$(ROOT_MNT)" BOOT_MNT="$(BOOT_MNT)" bash tools/seed-boot-visibility.sh; \
+	  $(MAKE) ensure-unmounted; \
+	  echo "[boot-visibility] done"
+.PHONY: seed-boot-visibility
