@@ -40,6 +40,9 @@ IMG_RAW := $(IMG_XZ:.xz=)
 DEVICE_EFFECTIVE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
 
 # Resolve DEVICE from cache if empty (works even if exported empty)
+DEVICE_EFFECTIVE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
+
+# Resolve DEVICE from cache if empty (works even if exported empty)
 DEVICE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
 
 
