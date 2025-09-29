@@ -331,3 +331,16 @@ img-expand-rootfs-offline:
 	fi; \
 	echo "[make] expanding on $$DISK"; \
 	bash tools/expand-rootfs-offline.sh "$$DISK"
+
+# --- stable workflow: capture key → write → expand ---
+.PHONY: sd-write+expand-stable
+sd-write+expand-stable:
+	@set -euo pipefail; \
+	echo "[make] capture disk key for $(DEVICE)"; \
+	DEVICE="$(DEVICE)" bash tools/disk-key-capture.sh; \
+	echo "[make] write image"; \
+	$(MAKE) sd-write CONFIRM=$(CONFIRM); \
+	echo "[make] expand using stable resolver"; \
+	BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	KEY_FILE="cache/disk-key.env" \
+	bash -c 'DISK="$$(bash tools/resolve-disk-stable.sh)"; [[ -n "$$DISK" && -b "$$DISK" ]] || { echo "[make] ERROR: resolver returned no disk" >&2; exit 1; }; echo "[make] expanding on $$DISK"; bash tools/expand-rootfs-offline.sh "$$DISK"'
