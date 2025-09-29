@@ -335,3 +335,18 @@ img-expand-rootfs-offline:
 	e2fsck -fp "$$ROOT_PART" || true; \
 	resize2fs "$$ROOT_PART"; \
 	echo "[make] expand done"
+
+# --- expand rootfs after imaging (auto-resolve by labels) ---
+.PHONY: img-expand-rootfs-offline
+img-expand-rootfs-offline:
+	@echo "[make] offline expand (auto-resolve by label: $(ROOT_LABEL)/$(BOOT_LABEL))"
+	@set -euo pipefail; \
+	DISK="$$(BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" bash tools/resolve-disk-after-dd.sh)"; \
+	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
+	  if [ -n "$(DEVICE)" ] && [ -b "$(DEVICE)" ]; then DISK="$(DEVICE)"; fi; \
+	fi; \
+	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
+	  echo "[host-expand] ERROR: could not resolve SD disk by label or $(DEVICE)"; exit 1; \
+	fi; \
+	echo "[make] expanding on $$DISK"; \
+	bash tools/expand-rootfs-offline.sh "$$DISK"
