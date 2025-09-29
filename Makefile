@@ -297,3 +297,21 @@ resolve-disk:
 	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk
+
+# ---------- devices quick smoke test ----------
+.PHONY: devices-smoke
+devices-smoke:
+	@echo "[smoke] unmount (quiet)"; \
+	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted; \
+	echo "[smoke] mount"; \
+	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted; \
+	echo "[smoke] verify"; \
+	  findmnt -nr -o SOURCE,TARGET | grep -E "(/mnt/sysclone-(boot|root))" || true; \
+	echo "[smoke] unmount (final)"; \
+	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
