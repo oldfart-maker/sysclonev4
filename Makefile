@@ -315,3 +315,18 @@ devices-smoke:
 	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
+
+# --- stable wrapper: resolve device by by-path before each step ---
+.PHONY: sd-write+expand-stable
+sd-write+expand-stable:
+	@set -euo pipefail; \
+	: "${DEVICE_BY_PATH:?Set DEVICE_BY_PATH to your reader's /dev/disk/by-path/* symlink}"; \
+	DEV="$$(readlink -f "$(DEVICE_BY_PATH)")"; \
+	[ -b "$$DEV" ] || { echo "[stable] ERROR: not a block device (pre-write): $$DEV" >&2; exit 1; }; \
+	echo "[stable] writing to $$DEV"; \
+	$(MAKE) sd-write CONFIRM=$(CONFIRM) DEVICE="$$DEV"; \
+	# Re-resolve right after dd in case the kernel renumbered (sdc -> sdd)
+	DEV="$$(readlink -f "$(DEVICE_BY_PATH)")"; \
+	[ -b "$$DEV" ] || { echo "[stable] ERROR: not a block device (pre-expand): $$DEV" >&2; exit 1; }; \
+	echo "[stable] expanding on $$DEV"; \
+	$(MAKE) img-expand-rootfs-offline DEVICE="$$DEV"
