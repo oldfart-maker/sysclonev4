@@ -330,3 +330,17 @@ sd-write+expand-stable:
 	[ -b "$$DEV" ] || { echo "[stable] ERROR: not a block device (pre-expand): $$DEV" >&2; exit 1; }; \
 	echo "[stable] expanding on $$DEV"; \
 	$(MAKE) img-expand-rootfs-offline DEVICE="$$DEV"
+
+# --- stable wrapper: resolve by-path WITH WAIT before each step ---
+.PHONY: sd-write+expand-stable
+sd-write+expand-stable:
+	@set -euo pipefail; \
+	: "${DEVICE_BY_PATH:?Set DEVICE_BY_PATH to your reader's /dev/disk/by-path/* symlink}"; \
+	echo "[stable] resolving device (pre-write) from $(DEVICE_BY_PATH)"; \
+	DEV="$$(DEVICE_BY_PATH="$(DEVICE_BY_PATH)" bash tools/resolve-by-path-now.sh)"; \
+	echo "[stable] writing to $$DEV"; \
+	$(MAKE) sd-write CONFIRM=$(CONFIRM) DEVICE="$$DEV"; \
+	echo "[stable] resolving device (pre-expand) from $(DEVICE_BY_PATH)"; \
+	DEV="$$(DEVICE_BY_PATH="$(DEVICE_BY_PATH)" bash tools/resolve-by-path-now.sh)"; \
+	echo "[stable] expanding on $$DEV"; \
+	$(MAKE) img-expand-rootfs-offline DEVICE="$$DEV"
