@@ -317,47 +317,6 @@ devices-smoke:
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
 
 
-# --- override: expand rootfs offline with disk auto-resolve via labels ---
-.PHONY: img-expand-rootfs-offline
-img-expand-rootfs-offline:
-	@echo "[make] offline expand (auto-resolve by label: $(ROOT_LABEL)/$(BOOT_LABEL))"
-	@set -euo pipefail; \
-	# Try to resolve the parent disk from labels, tolerating post-dd re-enumeration
-	resolve_once() { \
-	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
-	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
-	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk; \
-	}; \
-	DISK=""; \
-	for i in $$(seq 1 60); do \
-	  out="$$(resolve_once || true)"; \
-	  line="$$(printf '%s\n' "$$out" | grep -E '^ROOT_' | head -n1 || true)"; \
-	  if [ -z "$$line" ]; then line="$$(printf '%s\n' "$$out" | grep -E '^BOOT_' | head -n1 || true)"; fi; \
-	  if [ -n "$$line" ]; then \
-	    DISK="$$(sed -n 's/.*(disk: \([^)]*\)).*/\1/p' <<<"$$line")"; \
-	  fi; \
-	  if [ -n "$$DISK" ] && [ -b "$$DISK" ]; then break; fi; \
-	  sleep 0.5; \
-	done; \
-	# Fallback to $(DEVICE) if still unresolved and valid
-	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
-	  if [ -n "$(DEVICE)" ] && [ -b "$(DEVICE)" ]; then DISK="$(DEVICE)"; fi; \
-	fi; \
-	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
-	  echo "[host-expand] ERROR: could not resolve SD disk by label or $(DEVICE)"; exit 1; \
-	fi; \
-	echo "[make] expanding on $$DISK"; \
-	# Partition suffix 'p' for mmc/nvme, '' for sdX
-	sfx=""; case "$$DISK" in *mmcblk*|*nvme*) sfx="p";; esac; \
-	ROOT_PART="$$DISK$${sfx}2"; \
-	# Ensure kernel sees the table, then grow part 2 to 100%, then resize fs
-	partprobe "$$DISK" || true; sync; \
-	parted -s "$$DISK" unit % print >/dev/null; \
-	parted -s "$$DISK" -- resizepart 2 100%; \
-	partprobe "$$DISK" || true; sync; \
-	e2fsck -fp "$$ROOT_PART" || true; \
-	resize2fs "$$ROOT_PART"; \
-
 # --- override: expand rootfs offline with disk auto-resolve via labels (robust) ---
 .PHONY: img-expand-rootfs-offline
 img-expand-rootfs-offline:
