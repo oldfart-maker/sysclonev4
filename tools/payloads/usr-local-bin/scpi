@@ -1,78 +1,76 @@
 #!/usr/bin/env bash
 
 # Fallbacks when NTP is slow/unavailable
+set -euo pipefail
+# --- sysclone net/certs bootstrap helpers (shared) ---
+wait_for_clock() {
+  local deadline=$(( $(date +%s) + 90 ))
+  local target_epoch=1704067200 # 2024-01-01 UTC
+  while [ "$(date -u +%s)" -lt "$target_epoch" ]; do
+    local synced
+    synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)"
+    [ "$synced" = yes ] && break
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep 2
+  done
+  return 0
+}
+
 fallback_ntp() {
   if command -v busybox >/dev/null 2>&1; then
-    busybox ntpd -n -q -p pool.ntp.org && return 0
+    busybox ntpd -n -q -p pool.ntp.org && return 0 || true
   fi
   return 1
 }
 
 fallback_set_http_date() {
-  # Use a plain HTTP Date header (no TLS) to roughly set clock
+  # Use plain HTTP (no TLS) to read Date header and set a coarse clock
   local d
-  d=$(curl -fsI --max-time 8 http://google.com 2>/dev/null | awk -F": " '/^Date:/{print $2; exit}')
-  if [ -n "$d" ]; then
-    sudo date -u -s "$d" >/dev/null 2>&1 || true
+  d="$(curl -fsI --max-time 8 http://google.com 2>/dev/null | awk -F": " '/^Date:/{print $2; exit}')"
+  if [ -n "${d:-}" ]; then
+    date -u -s "$d" >/dev/null 2>&1 || true
   fi
 }
-set -euo pipefail
 
-need_make() { ! command -v make >/dev/null 2>&1; }
-
-wait_for_clock() {
-  # Wait until NTP says yes OR epoch > 2024-01-01
-  local deadline=$((SECONDS+240))
-  while (( SECONDS < deadline )); do
-    local synced
-    synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo "no")
-    local now
-    now=$(date -u +%s 2>/dev/null || echo 0)
-    if [[ "$synced" = "yes" || "$now" -ge 1704067200 ]]; then
-      return 0
-    fi
-    sleep 3
-  done
-  return 1
-}
-
-bootstrap_make() {
-  echo "[scpi] 'make' not found, bootstrapping…"
-  if ! command -v pacman >/dev/null 2>&1; then
-    echo "[scpi] pacman not found; please install 'make' manually"; exit 1
-  fi
-
-  # Ensure NTP is on and wait for a sane clock (TLS mirrors need correct time)
+ensure_net_bootstrap() {
+  echo "[scpi] ensuring sane clock and package trust (NTP, CA, keyrings, mirrors)"
   sudo timedatectl set-ntp true || true
   sudo systemctl restart systemd-timesyncd || true
   if ! wait_for_clock; then
-    echo "[scpi] WARN: clock not yet synced; trying quick NTP and HTTP-Date fallback"
+    echo "[scpi] WARN: clock not yet synced; trying quick NTP + HTTP-Date fallback"
     fallback_ntp || true
-    synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)
-    now=$(date -u +%s 2>/dev/null || echo 0)
+    local synced now
+    synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)"
+    now="$(date -u +%s 2>/dev/null || echo 0)"
     if [ "$synced" != yes ] && [ "${now:-0}" -lt 1704067200 ]; then
-      echo "[scpi] clock still off; setting from HTTP Date, then re-enabling NTP"
       fallback_set_http_date || true
       sudo timedatectl set-ntp true || true
       sudo systemctl restart systemd-timesyncd || true
       wait_for_clock || true
     fi
   fi
-
-  # Make sure CA roots + keyrings present before any TLS mirror pulls
+  # Certs first (TLS to mirrors)
   sudo pacman -Sy --noconfirm --needed ca-certificates ca-certificates-mozilla || true
+  # Keyrings next
   sudo pacman -Sy --noconfirm --needed archlinux-keyring manjaro-keyring archlinuxarm-keyring manjaro-arm-keyring || true
-
-  # On Manjaro ARM, refreshing mirrors can help; best-effort only
+  # Manjaro mirror refresh if available (best-effort)
   if command -v pacman-mirrors >/dev/null 2>&1; then
     sudo pacman-mirrors --fasttrack 5 --geoip || true
   fi
-
-  # Update and install
-  sudo pacman -Syyu --noconfirm --needed make
+  # Fresh DBs
+  sudo pacman -Syy || true
 }
 
 
+need_make() { ! command -v make >/dev/null 2>&1; }
+bootstrap_make() {
+  echo "[scpi] 'make' not found, bootstrapping…"
+  if ! command -v pacman >/dev/null 2>&1; then
+    echo "[scpi] pacman not found; please install 'make' manually"; exit 1
+  fi
+  ensure_net_bootstrap
+  sudo pacman -Syyu --noconfirm --needed make
+}
 if need_make; then
   bootstrap_make
 fi
