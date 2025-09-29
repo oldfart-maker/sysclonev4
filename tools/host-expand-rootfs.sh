@@ -55,7 +55,7 @@ if command -v sfdisk >/dev/null 2>&1; then
   [ "$newsize" -gt 0 ] || die "computed non-positive size for ${DEVICE}2 (total=$total start=$p2start)"
 
   # rewrite p2 explicitly with same start, explicit size, and Linux type (0x83)
-  printf "%s : start= %s, size= %s, type=83\n" "${DEVICE}2" "$p2start" "$newsize" |     sfdisk --no-reread --force "$DEVICE"
+  echo ",+" | sfdisk -N 2 --no-reread --force "$DEVICE"
 
 elif command -v parted >/dev/null 2>&1; then
   log "using parted to expand partition 2 (fallback)"
@@ -74,6 +74,13 @@ fi
 
 # refresh kernel view of the new table
 log "refreshing kernel partition table (partprobe/partx) and udev"
+partprobe "$DEVICE" || true
+partx -u "$DEVICE" || true
+udevadm settle || true
+sleep 1
+
+# verify boot partition still present
+[ -b "${DEVICE}1" ] || die "boot (p1) disappeared after grow; refusing to continue"
 partprobe "$DEVICE" || true
 partx -u "$DEVICE" || true
 udevadm settle || true
