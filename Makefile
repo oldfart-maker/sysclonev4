@@ -357,3 +357,41 @@ img-expand-rootfs-offline:
 	partprobe "$$DISK" || true; sync; \
 	e2fsck -fp "$$ROOT_PART" || true; \
 	resize2fs "$$ROOT_PART"; \
+
+# --- override: expand rootfs offline with disk auto-resolve via labels (robust) ---
+.PHONY: img-expand-rootfs-offline
+img-expand-rootfs-offline:
+	@echo "[make] offline expand (auto-resolve by label: $(ROOT_LABEL)/$(BOOT_LABEL))"
+	@set -euo pipefail; \
+	ROOTVAL="$(ROOT_LABEL)"; BOOTVAL="$(BOOT_LABEL)"; \
+	get_disk() { \
+	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk | \
+	  awk -v r="^"$$ROOTVAL" ->" -v b="^"$$BOOTVAL" ->" '\
+	    $0 ~ r { if (match($0, /\(disk: ([^)]+)\)/, m)) { print m[1]; exit } } \
+	    $0 ~ b { if (match($0, /\(disk: ([^)]+)\)/, m)) { print m[1]; exit } }'; \
+	}; \
+	DISK=""; \
+	for i in $$(seq 1 120); do \
+	  DISK="$$(get_disk)"; \
+	  if [ -n "$$DISK" ] && [ -b "$$DISK" ]; then break; fi; \
+	  sleep 0.5; \
+	done; \
+	# Fallback to $(DEVICE) if still unresolved and valid
+	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
+	  if [ -n "$(DEVICE)" ] && [ -b "$(DEVICE)" ]; then DISK="$(DEVICE)"; fi; \
+	fi; \
+	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
+	  echo "[host-expand] ERROR: could not resolve SD disk by label or $(DEVICE)"; exit 1; \
+	fi; \
+	echo "[make] expanding on $$DISK"; \
+	sfx=""; case "$$DISK" in *mmcblk*|*nvme*) sfx="p";; esac; \
+	ROOT_PART="$$DISK$${sfx}2"; \
+	partprobe "$$DISK" || true; sync; \
+	parted -s "$$DISK" unit % print >/dev/null; \
+	parted -s "$$DISK" -- resizepart 2 100%; \
+	partprobe "$$DISK" || true; sync; \
+	e2fsck -fp "$$ROOT_PART" || true; \
+	resize2fs "$$ROOT_PART"; \
+	echo "[make] expand done"
