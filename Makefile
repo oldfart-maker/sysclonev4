@@ -135,15 +135,6 @@ seed-layer2.5-greetd: ensure-mounted  ## (Optional) greetd (agreety/tuigreet) lo
 	sudo env ROOT_MNT="/mnt/sysclone-root" bash seeds/layer2.5/seed-greetd.sh
 # ---------------- End Layer 2 block ----------------
 
-# ---------- Mount helpers for seeding (idempotent) ----------
-# Only define ROOT_MNT if not already set elsewhere in your Makefile
-
-.PHONY: ensure-mounted ensure-unmounted
-
-ensure-mounted: ## Mount ROOT/BOOT by label if not already mounted
-	@bash tools/ensure-mount.sh
-ensure-unmounted: ## Unmount ROOT/BOOT by label if mounted
-	@bash tools/ensure-unmount.sh
 
 # -------------------- Layer 1 (first boot) --------------------
 .PHONY: seed-layer1-disable-first-boot seed-layer1-first-boot-service
@@ -196,6 +187,7 @@ seed-layer1-all: ensure-mounted ## Layer1: disable first-boot + install first-bo
 	  $(MAKE) clear-layer1-stamps; \
 	  $(MAKE) seed-layer1-disable-first-boot; \
 	  $(MAKE) seed-layer1-expand-rootfs; \
+	  $(MAKE) seed-layer1-net-bootstrap; \
 	  $(MAKE) seed-layer1-first-boot-service; \
 	  $(MAKE) seed-pi-devtools; \
 	  $(MAKE) ensure-unmounted; \
@@ -262,8 +254,8 @@ img-expand-rootfs-offline: ensure-unmounted
 	@echo "[make] offline expand on $(DEVICE_EFFECTIVE)"
 	@sudo env DEVICE=$(DEVICE_EFFECTIVE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) tools/host-expand-rootfs.sh
 
-## Convenience: write image then expand offline
-sd-write+expand: sd-write img-expand-rootfs-offline
+
+sd-write+expand: sd-write img-expand-rootfs-offline ## Convenience: write image then expand offline
 
 ## Quick check (mounted): shows sizes for sanity
 verify-rootfs-size: ensure-mounted
@@ -279,3 +271,29 @@ seed-layer1-network-bootstrap: ensure-mounted ## Layer1: stage network/certs boo
 	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-network-bootstrap.sh
 
 .PHONY: seed-layer1-network-bootstrap
+
+# Layer1: stage network/clock/mirrors bootstrap (runs once on target)
+seed-layer1-net-bootstrap: ensure-mounted  ## Layer1: seed net/clock/certs bootstrap (on-target)
+	@echo "[layer1] net-bootstrap via tools/seed-net-bootstrap.sh"
+	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-net-bootstrap.sh
+
+## Stable mount/unmount by LABEL (no /dev/sdX guessing)
+.PHONY: ensure-mounted ensure-unmounted resolve-disk
+
+ensure-mounted:
+	@echo "[make] mounting $(ROOT_LABEL) -> $(ROOT_MNT) and $(BOOT_LABEL) -> $(BOOT_MNT)"
+	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted
+
+ensure-unmounted:
+	@echo "[make] unmounting $(ROOT_MNT) and $(BOOT_MNT) (by label)"
+	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
+
+# Optional: print the parent disk (e.g. /dev/sdc) resolved from labels/mounts
+resolve-disk:
+	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
+	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk
