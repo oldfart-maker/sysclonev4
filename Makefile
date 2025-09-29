@@ -316,3 +316,18 @@ img-expand-rootfs-offline:
 .PHONY: sd-write+expand
 sd-write+expand: sd-write img-expand-rootfs-offline
 	@true
+
+# --- img-expand-rootfs-offline: use stable resolver (by-path/by-id) ---
+.PHONY: img-expand-rootfs-offline
+img-expand-rootfs-offline:
+	@echo "[make] offline expand (stable resolve)"
+	@set -euo pipefail; \
+	DISK="$$(BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	         bash tools/resolve-disk-stable.sh --prefer-device "$(DEVICE)" \
+	                                        --boot-label "$(BOOT_LABEL)" \
+	                                        --root-label "$(ROOT_LABEL)")"; \
+	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
+	  echo "[host-expand] ERROR: resolver returned no disk"; exit 1; \
+	fi; \
+	echo "[make] expanding on $$DISK"; \
+	bash tools/expand-rootfs-offline.sh "$$DISK"
