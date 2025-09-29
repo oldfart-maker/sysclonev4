@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
+
+# Fallbacks when NTP is slow/unavailable
+fallback_ntp() {
+  if command -v busybox >/dev/null 2>&1; then
+    busybox ntpd -n -q -p pool.ntp.org && return 0
+  fi
+  return 1
+}
+
+fallback_set_http_date() {
+  # Use a plain HTTP Date header (no TLS) to roughly set clock
+  local d
+  d=$(curl -fsI --max-time 8 http://google.com 2>/dev/null | awk -F": " '/^Date:/{print $2; exit}')
+  if [ -n "$d" ]; then
+    sudo date -u -s "$d" >/dev/null 2>&1 || true
+  fi
+}
 set -euo pipefail
 
 need_make() { ! command -v make >/dev/null 2>&1; }
@@ -29,22 +46,32 @@ bootstrap_make() {
   sudo timedatectl set-ntp true || true
   sudo systemctl restart systemd-timesyncd || true
   if ! wait_for_clock; then
-    echo "[scpi] WARN: clock may still be wrong; proceeding anyway"
+    echo "[scpi] WARN: clock not yet synced; trying quick NTP and HTTP-Date fallback"
+    fallback_ntp || true
+    synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no)
+    now=$(date -u +%s 2>/dev/null || echo 0)
+    if [ "$synced" != yes ] && [ "${now:-0}" -lt 1704067200 ]; then
+      echo "[scpi] clock still off; setting from HTTP Date, then re-enabling NTP"
+      fallback_set_http_date || true
+      sudo timedatectl set-ntp true || true
+      sudo systemctl restart systemd-timesyncd || true
+      wait_for_clock || true
+    fi
   fi
 
-  # Keyring sometimes missing/uninitialized on first boot
-  if [[ ! -d /etc/pacman.d/gnupg ]] || [[ ! -r /etc/pacman.d/gnupg/pubring.gpg && ! -d /etc/pacman.d/gnupg/openpgp-revocs.d ]]; then
-    echo "[scpi] initializing pacman keyring…"
-    sudo rm -rf /etc/pacman.d/gnupg
-    sudo pacman-key --init
-    # Populate all the sets that show up in ARM/Manjaro combos
-    sudo pacman-key --populate archlinux manjaro archlinuxarm manjaro-arm 2>/dev/null || \
-    sudo pacman-key --populate archlinux manjaro 2>/dev/null || true
+  # Make sure CA roots + keyrings present before any TLS mirror pulls
+  sudo pacman -Sy --noconfirm --needed ca-certificates ca-certificates-mozilla || true
+  sudo pacman -Sy --noconfirm --needed archlinux-keyring manjaro-keyring archlinuxarm-keyring manjaro-arm-keyring || true
+
+  # On Manjaro ARM, refreshing mirrors can help; best-effort only
+  if command -v pacman-mirrors >/dev/null 2>&1; then
+    sudo pacman-mirrors --fasttrack 5 --geoip || true
   fi
 
   # Update and install
   sudo pacman -Syyu --noconfirm --needed make
 }
+
 
 if need_make; then
   bootstrap_make
