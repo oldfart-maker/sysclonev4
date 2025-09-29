@@ -59,7 +59,7 @@ show-config:  ## Show important variables
 	@echo "CACHE_DIR  = $(CACHE_DIR)"
 	@echo "IMG_XZ     = $(IMG_XZ)"
 	@echo "IMG_RAW    = $(IMG_RAW)"
-	@echo "DEVICE     = $((DEVICE_EFFECTIVE))"
+	@echo "DEVICE     = $(DEVICE_EFFECTIVE)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "BOOT_LABEL = $(BOOT_LABEL)"
 	@echo "ROOT_LABEL = $(ROOT_LABEL)"
@@ -81,8 +81,8 @@ img-unpack: img-download  ## Decompress .xz into a raw .img (once)
 
 sd-write:  ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFIRM=yes
 	@[ "$(CONFIRM)" = "yes" ] || { echo "Refusing: set CONFIRM=yes"; exit 2; }
-	@[ -n "$(DEVICE)" ] || { echo "Refusing: set DEVICE=/dev/sdX"; exit 2; }
-	@sudo dd if="$(IMG_RAW)" of="$(DEVICE)" bs=4M status=progress conv=fsync
+	@[ -n "$(DEVICE_EFFECTIVE)" ] || { echo "Refusing: set DEVICE=/dev/sdX (or use make DEVICE=/dev/sdX set-device)"; exit 2; }
+	@sudo dd if="$(IMG_RAW)" of="$(DEVICE_EFFECTIVE)" bs=4M status=progress conv=fsync
 
 flash-all: img-unpack sd-write  ## img-download + img-unpack + sd-write
 
@@ -259,8 +259,8 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 
 ## Expand rootfs offline on the SD card (requires DEVICE=/dev/...)
 img-expand-rootfs-offline: ensure-unmounted
-	@echo "[make] offline expand on $(DEVICE)"
-	DEVICE=$(DEVICE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) sudo tools/host-expand-rootfs.sh
+	@echo "[make] offline expand on $(DEVICE_EFFECTIVE)"
+	@sudo env DEVICE=$(DEVICE_EFFECTIVE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) tools/host-expand-rootfs.sh
 
 ## Convenience: write image then expand offline
 sd-write+expand: sd-write img-expand-rootfs-offline
@@ -272,3 +272,10 @@ verify-rootfs-size: ensure-mounted
 	@df -h | sed -n "1,200p"
 	@echo "[make] .rootfs-expanded stamp:" && ls -l $(ROOT_MNT)/var/lib/sysclone/.rootfs-expanded || true
 # ---------------------------------------------------------------------------
+
+# Layer1: bootstrap clock/certs/keyrings/mirrors on first boot (pre-firstboot)
+seed-layer1-network-bootstrap: ensure-mounted ## Layer1: stage network/certs bootstrap service
+	@echo "[layer1] seed-network-bootstrap"
+	sudo env ROOT_MNT="$(ROOT_MNT)" bash tools/seed-layer1-network-bootstrap.sh
+
+.PHONY: seed-layer1-network-bootstrap
