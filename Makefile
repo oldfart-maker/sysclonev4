@@ -315,6 +315,8 @@ devices-smoke:
 	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
+
+
 # --- override: expand rootfs offline with disk auto-resolve via labels ---
 .PHONY: img-expand-rootfs-offline
 img-expand-rootfs-offline:
