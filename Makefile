@@ -246,25 +246,6 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 .PHONY: seed-boot-visibility
 
 
-# --- sysclone host-side rootfs expansion (offline) --------------------------
-.PHONY: img-expand-rootfs-offline verify-rootfs-size sd-write+expand
-
-## Expand rootfs offline on the SD card (requires DEVICE=/dev/...)
-img-expand-rootfs-offline: ensure-unmounted
-	@echo "[make] offline expand on $(DEVICE_EFFECTIVE)"
-	@sudo env DEVICE=$(DEVICE_EFFECTIVE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) tools/host-expand-rootfs.sh
-
-
-sd-write+expand: sd-write img-expand-rootfs-offline ## Convenience: write image then expand offline
-
-## Quick check (mounted): shows sizes for sanity
-verify-rootfs-size: ensure-mounted
-	@echo "[make] verify sizes on mounted card"
-	@lsblk -e7 -o NAME,SIZE,TYPE,MOUNTPOINTS | sed -n "1,200p"
-	@df -h | sed -n "1,200p"
-	@echo "[make] .rootfs-expanded stamp:" && ls -l $(ROOT_MNT)/var/lib/sysclone/.rootfs-expanded || true
-# ---------------------------------------------------------------------------
-
 # Layer1: bootstrap clock/certs/keyrings/mirrors on first boot (pre-firstboot)
 seed-layer1-network-bootstrap: ensure-mounted ## Layer1: stage network/certs bootstrap service
 	@echo "[layer1] seed-network-bootstrap"
