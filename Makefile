@@ -4,6 +4,8 @@ SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
 
+-include .sysclone.env
+
 # -------- Config --------
 IMG_URL    ?= https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
 CACHE_DIR  ?= cache
@@ -27,24 +29,32 @@ BOOT_MNT ?= /mnt/sysclone-boot
 export ROOT_MNT BOOT_MNT DEVICE
 
 # Optional: convenience to "remember" a device once
-set-device: ## Set/remember DEVICE=/dev/sdX for later runs (aggregates included)
-	@[ -n "$(DEVICE)" ] || { echo "Set DEVICE=/dev/SDX, e.g. make DEVICE=/dev/sdu set-device"; exit 2; }
-	@mkdir -p .cache/sysclonev4
-	@echo "$(DEVICE)" > .cache/sysclonev4/last-device
-	@echo "Saved DEVICE = $(DEVICE)"
+.PHONY: set-device
+set-device: ## Set disk for sd-write: make set-device DEVICE=/dev/sdX
+	@set -euo pipefail; \
+	: "${DEVICE:?Usage: make set-device DEVICE=/dev/sdX}"; \
+	[ -b "$$DEVICE" ] || { echo "[set-device] ERROR: $$DEVICE is not a block device"; exit 1; }; \
+	tmp=.sysclone.env.__new__; \
+	{ grep -v '^DEVICE=' .sysclone.env 2>/dev/null || true; echo "DEVICE=$$DEVICE"; } > $$tmp; \
+	mv $$tmp .sysclone.env; \
+	echo "[set-device] DEVICE=$$DEVICE"
+
+.PHONY: set-root
+set-root:   ## Set root partition for expand: make set-root ROOT=/dev/sdX2
+	@set -euo pipefail; \
+	: "${ROOT:?Usage: make set-root ROOT=/dev/sdX2}"; \
+	[ -b "$$ROOT" ] || { echo "[set-root] ERROR: $$ROOT is not a block device"; exit 1; }; \
+	tmp=.sysclone.env.__new__; \
+	{ grep -v '^ROOT=' .sysclone.env 2>/dev/null || true; echo "ROOT=$$ROOT"; } > $$tmp; \
+	mv $$tmp .sysclone.env; \
+	echo "[set-root] ROOT=$$ROOT"
+
 
 IMG_XZ  := $(CACHE_DIR)/$(notdir $(IMG_URL))
 IMG_RAW := $(IMG_XZ:.xz=)
 
 # Resolve DEVICE from cache if empty (works even if exported empty)
 DEVICE_EFFECTIVE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
-
-# Resolve DEVICE from cache if empty (works even if exported empty)
-DEVICE_EFFECTIVE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
-
-# Resolve DEVICE from cache if empty (works even if exported empty)
-DEVICE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/last-device && cat .cache/sysclonev4/last-device))
-
 
 BOOT_MOUNT ?= /run/media/$(USER)/BOOT
 CONFIRM    ?=
@@ -60,6 +70,8 @@ show-config:  ## Show important variables
 	@echo "IMG_XZ     = $(IMG_XZ)"
 	@echo "IMG_RAW    = $(IMG_RAW)"
 	@echo "DEVICE     = $(DEVICE_EFFECTIVE)"
+	@echo "SD_DISK    = $(DEVICE)"
+	@echo "SD_ROOT    = $(ROOT)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "BOOT_LABEL = $(BOOT_LABEL)"
 	@echo "ROOT_LABEL = $(ROOT_LABEL)"
@@ -80,9 +92,11 @@ img-unpack: img-download  ## Decompress .xz into a raw .img (once)
 	else echo "[xz] cached: $(IMG_RAW)"; fi
 
 sd-write:  ## Write raw image to SD (DESTRUCTIVE) — pass DEVICE=/dev/sdX CONFIRM=yes
+	@[ -b "$(DEVICE_EFFECTIVE)" ] || { echo "[sd-write] ERROR: not a block device: $(DEVICE_EFFECTIVE)"; exit 1; }
 	@[ "$(CONFIRM)" = "yes" ] || { echo "Refusing: set CONFIRM=yes"; exit 2; }
-	@[ -n "$(DEVICE_EFFECTIVE)" ] || { echo "Refusing: set DEVICE=/dev/sdX (or use make DEVICE=/dev/sdX set-device)"; exit 2; }
 	@sudo dd if="$(IMG_RAW)" of="$(DEVICE_EFFECTIVE)" bs=4M status=progress conv=fsync
+	@mkdir -p .cache/sysclonev4 && echo "$(DEVICE_EFFECTIVE)" > .cache/sysclonev4/last-device
+
 
 flash-all: img-unpack sd-write  ## img-download + img-unpack + sd-write
 
