@@ -344,3 +344,25 @@ sd-write+expand-stable:
 	DEV="$$(DEVICE_BY_PATH="$(DEVICE_BY_PATH)" bash tools/resolve-by-path-now.sh)"; \
 	echo "[stable] expanding on $$DEV"; \
 	$(MAKE) img-expand-rootfs-offline DEVICE="$$DEV"
+
+# --- manual expand step: you provide DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
+.PHONY: expand-on-device
+expand-on-device:
+	@set -euo pipefail; \
+	: "${DEVICE:?Set DEVICE=/dev/sdX (current SD disk node)}"; \
+	echo "[expand] preparing on $$DEVICE"; \
+	# Wait for device (and its partition 2) to be present
+	TIMEOUT=45 SLEEP=0.25 bash tools/wait-block.sh "$$DEVICE" --need-p2 >/dev/null; \
+	# Kernel (re)read partition table just in case
+	partprobe "$$DEVICE" || true; sync; command -v udevadm >/dev/null && udevadm settle || true; \
+	# Compute root partition path with correct suffix
+	sfx=""; case "$$DEVICE" in *mmcblk*|*nvme*) sfx="p";; esac; \
+	ROOT_PART="$$DEVICE$${sfx}2"; \
+	echo "[expand] resizing partition 2 on $$DEVICE to 100%"; \
+	parted -s "$$DEVICE" unit % print >/dev/null; \
+	parted -s "$$DEVICE" -- resizepart 2 100%; \
+	partprobe "$$DEVICE" || true; sync; command -v udevadm >/dev/null && udevadm settle || true; \
+	echo "[expand] fsck + resize2fs on $$ROOT_PART"; \
+	e2fsck -fp "$$ROOT_PART" || true; \
+	resize2fs "$$ROOT_PART"; \
+	echo "[expand] done"
