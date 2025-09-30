@@ -249,16 +249,7 @@ seed-boot-visibility: ensure-mounted ## Add console output & BOOT logs for first
 # --- sysclone host-side rootfs expansion (offline) --------------------------
 .PHONY: img-expand-rootfs-offline verify-rootfs-size sd-write+expand
 
-## Expand rootfs offline on the SD card (requires DEVICE=/dev/...)
-img-expand-rootfs-offline: ensure-unmounted
-	@echo "[make] offline expand on $(DEVICE_EFFECTIVE)"
-	@sudo env DEVICE=$(DEVICE_EFFECTIVE) ROOT_MNT=$(ROOT_MNT) BOOT_MNT=$(BOOT_MNT) tools/host-expand-rootfs.sh
-
-
-sd-write+expand: sd-write img-expand-rootfs-offline ## Convenience: write image then expand offline
-
-## Quick check (mounted): shows sizes for sanity
-verify-rootfs-size: ensure-mounted
+verify-rootfs-size: ensure-mounted ## Quick check (mounted): shows sizes for sanity
 	@echo "[make] verify sizes on mounted card"
 	@lsblk -e7 -o NAME,SIZE,TYPE,MOUNTPOINTS | sed -n "1,200p"
 	@df -h | sed -n "1,200p"
@@ -280,20 +271,19 @@ seed-layer1-net-bootstrap: ensure-mounted  ## Layer1: seed net/clock/certs boots
 ## Stable mount/unmount by LABEL (no /dev/sdX guessing)
 .PHONY: ensure-mounted ensure-unmounted resolve-disk
 
-ensure-mounted:
+ensure-mounted: ## mount device via auto-find device
 	@echo "[make] mounting $(ROOT_LABEL) -> $(ROOT_MNT) and $(BOOT_LABEL) -> $(BOOT_MNT)"
 	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted
 
-ensure-unmounted:
+ensure-unmounted: ## unmount device via auto-find device
 	@echo "[make] unmounting $(ROOT_MNT) and $(BOOT_MNT) (by label)"
 	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
 
-# Optional: print the parent disk (e.g. /dev/sdc) resolved from labels/mounts
-resolve-disk:
+resolve-disk: # Optional: print the parent disk (e.g. /dev/sdc) resolved from labels/mounts
 	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk
@@ -315,3 +305,13 @@ devices-smoke:
 	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
 	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
+
+# --- manual-only expand: pass DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
+.PHONY: img-expand-rootfs-offline
+img-expand-rootfs-offline:
+	@echo "[make] unmounting /mnt/sysclone-root and /mnt/sysclone-boot (by label)"
+	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
+	  BOOT_MOUNT="/mnt/sysclone-boot" ROOT_MOUNT="/mnt/sysclone-root" \
+	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
+	@echo "[make] offline expand on $(DEVICE)"
+	@sudo env DEVICE="$(DEVICE)" bash tools/expand-rootfs-manual.sh
