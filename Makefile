@@ -308,10 +308,9 @@ devices-smoke:
 
 # --- manual-only expand: pass DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
 .PHONY: img-expand-rootfs-offline
+
+# --- manual-only expand: requires DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
+.PHONY: img-expand-rootfs-offline
 img-expand-rootfs-offline:
-	@echo "[make] unmounting /mnt/sysclone-root and /mnt/sysclone-boot (by label)"
-	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
-	  BOOT_MOUNT="/mnt/sysclone-boot" ROOT_MOUNT="/mnt/sysclone-root" \
-	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
 	@echo "[make] offline expand on $(DEVICE)"
-	@sudo env DEVICE="$(DEVICE)" bash tools/expand-rootfs-manual.sh
+	@sudo DEVICE="$(DEVICE)" bash tools/expand-rootfs-manual.sh
