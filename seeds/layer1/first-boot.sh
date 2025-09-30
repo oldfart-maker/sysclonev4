@@ -85,3 +85,18 @@ main() {
 }
 
 main "$@"
+
+# --- seatd-ensure-start (idempotent) -----------------------------------------
+# Ensure first user is in required groups and seatd is running (if installed)
+{
+  USER_NAME="${USERNAME:-username}"
+  for g in seat input video render; do
+    getent group "$g" >/dev/null 2>&1 || groupadd -r "$g" || true
+  done
+  usermod -aG seat,input,video,render "$USER_NAME" || true
+  if systemctl list-unit-files --no-legend | grep -q '^seatd\.service'; then
+    systemctl enable --now seatd.service || true
+  fi
+  log "seatd/groups ensured for $USER_NAME"
+}
+# --- seatd-ensure-end ---------------------------------------------------------
