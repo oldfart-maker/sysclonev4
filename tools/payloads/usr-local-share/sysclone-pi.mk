@@ -43,7 +43,7 @@ verify-layer2-install:
 	echo "[pi] mirrorlist head"
 	sed -n '1,20p' /etc/pacman.d/mirrorlist || true
 
-verify-layer2\.5-install:
+verify-layer2.5-install:
 	@set -euo pipefail
 	echo "[pi] greetd + seatd status"
 	systemctl is-enabled greetd || true
@@ -63,7 +63,7 @@ verify-layer2\.5-install:
 logs-layer2:
 	journalctl -u $(unit_l2) -b --no-pager --no-hostname
 
-logs-layer2\.5:
+logs-layer2.5:
 	journalctl -u $(unit_l25) -b --no-pager --no-hostname
 
 rerun-layer2-install:
@@ -74,7 +74,7 @@ rerun-layer2-install:
 	systemctl start $(unit_l2) || true
 	systemctl status $(unit_l2) --no-pager || true
 
-rerun-layer2\.5-install:
+rerun-layer2.5-install:
 	@set -euo pipefail
 	echo "[pi] clearing stamp + starting $(unit_l25)"
 	rm -f $(stamp_dir)/.layer2.5-greetd-installed || true
