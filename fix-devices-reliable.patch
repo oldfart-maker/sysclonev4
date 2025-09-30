@@ -1,0 +1,184 @@
+From 7d9e8c2a8a9b4b219b17e46e2a1a2c9b71b7eabc Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 16:30:00 -0400
+Subject: [PATCH] tools/devices.sh: treat "mounted" correctly; bind if elsewhere
+
+- Detect true mount state with mountpoint/findmnt (not just directory exist).
+- Mount by label; if device is mounted elsewhere, bind mount to desired path.
+- Unmount defensively (by path and by device).
+- Print an explicit mounts summary.
+
+---
+ tools/devices.sh | 168 ++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 165 insertions(+), 3 deletions(-)
+
+diff --git a/tools/devices.sh b/tools/devices.sh
+index 0000000..1111111 100755
+--- a/tools/devices.sh
++++ b/tools/devices.sh
+@@ -1,20 +1,182 @@
+ #!/usr/bin/env bash
+-set -euo pipefail
++set -Eeuo pipefail
+ 
+ BOOT_LABEL="${BOOT_LABEL:-BOOT_MNJRO}"
+ ROOT_LABEL="${ROOT_LABEL:-ROOT_MNJRO}"
+ BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
+ ROOT_MOUNT="${ROOT_MOUNT:-/mnt/sysclone-root}"
+ SUDO="${SUDO:-sudo}"
+ 
+-dev_by_label() {
+-  local label="$1"
+-  if command -v blkid >/dev/null 2>&1; then
+-    local p
+-    p="$(blkid -L "$label" 2>/dev/null || true)"
+-    if [ -n "${p:-}" ]; then
+-      readlink -f "$p"
+-...
+-    echo "$L -> $dev (disk: ${parent:-unknown})"
+-  done
+-}
++log(){ printf '[devices] %s\n' "$*"; }
++err(){ printf '[devices] ERROR: %s\n' "$*" >&2; }
++die(){ err "$*"; exit 1; }
++
++have(){ command -v "$1" >/dev/null 2>&1; }
++
++dev_by_label() {
++  # Resolve a block device path by filesystem label (e.g., /dev/sdc1)
++  local label="$1" p=""
++  if have blkid; then
++    p="$(blkid -L "$label" 2>/dev/null || true)"
++    [[ -n "${p:-}" ]] && readlink -f -- "$p" && return 0
++  fi
++  if have lsblk; then
++    p="$(lsblk -rpo NAME,LABEL | awk -v L="$label" '$2==L{print $1; exit}')"
++    [[ -n "${p:-}" ]] && readlink -f -- "$p" && return 0
++  fi
++  return 1
++}
++
++mounted_at() {
++  # Where is this device mounted (one line, TARGET), if at all?
++  local dev="$1"
++  findmnt -nr -S "$dev" -o TARGET 2>/dev/null || true
++}
++
++is_path_mounted() {
++  local path="$1"
++  mountpoint -q -- "$path"
++}
++
++bind_if_elsewhere() {
++  # If dev is mounted elsewhere, create a bind at desired mountpoint
++  local dev="$1" want="$2"
++  local cur; cur="$(mounted_at "$dev")"
++  if [[ -n "$cur" && "$cur" != "$want" ]]; then
++    log "$dev already mounted at $cur; bind-mounting to $want"
++    $SUDO mkdir -p -- "$want"
++    $SUDO mount --bind "$cur" "$want"
++    return 0
++  fi
++  return 1
++}
++
++ensure_one_mounted() {
++  local label="$1" dev mnt fstype
++  dev="$(dev_by_label "$label")" || die "Could not find device with label $label"
++
++  if [[ "$label" == "$BOOT_LABEL" ]]; then
++    mnt="$BOOT_MOUNT"; fstype="vfat"
++  else
++    mnt="$ROOT_MOUNT"; fstype="ext4"
++  fi
++
++  # If mounted at our desired path already, done.
++  if is_path_mounted "$mnt"; then
++    # But double-check it's the same backing device; otherwise force remount
++    local cur_dev; cur_dev="$(findmnt -nr -T "$mnt" -o SOURCE || true)"
++    if [[ "$cur_dev" == "$dev" ]]; then
++      log "already mounted: $mnt"
++      echo "$mnt"
++      return 0
++    else
++      log "remounting $mnt to correct device ($dev)"
++      $SUDO umount -R "$mnt" || $SUDO umount -Rl "$mnt" || true
++    fi
++  fi
++
++  # If device is mounted somewhere else, bind it
++  if bind_if_elsewhere "$dev" "$mnt"; then
++    echo "$mnt"
++    return 0
++  fi
++
++  # Fresh mount
++  $SUDO mkdir -p -- "$mnt"
++  log "mounting $label ($dev) -> $mnt"
++  if ! $SUDO mount "$dev" "$mnt" 2>/dev/null; then
++    $SUDO mount -t "$fstype" "$dev" "$mnt"
++  fi
++  echo "$mnt"
++}
++
++lazy_unmount_path() {
++  local path="$1"
++  if is_path_mounted "$path"; then
++    log "unmounting $path"
++    $SUDO umount -R "$path" || $SUDO umount -Rl "$path" || true
++  fi
++}
++
++ensure-mounted() {
++  log "ensure-mounted: $ROOT_LABEL -> $ROOT_MOUNT and $BOOT_LABEL -> $BOOT_MOUNT"
++  ensure_one_mounted "$ROOT_LABEL" >/dev/null
++  ensure_one_mounted "$BOOT_LABEL"  >/dev/null
++
++  log "mounts:"
++  findmnt -nr -o SOURCE,TARGET | egrep -e "$BOOT_LABEL|$ROOT_LABEL|sysclone-(boot|root)" || true
++}
++
++ensure-unmounted() {
++  log "ensure-unmounted: $BOOT_MOUNT and $ROOT_MOUNT"
++  # Unmount by path first
++  lazy_unmount_path "$BOOT_MOUNT"
++  lazy_unmount_path "$ROOT_MOUNT"
++
++  # Also unmount any other residual mountpoints for the labeled devices
++  local dev
++  for L in "$BOOT_LABEL" "$ROOT_LABEL"; do
++    if dev="$(dev_by_label "$L")"; then
++      local t; t="$(mounted_at "$dev")"
++      if [[ -n "${t:-}" ]]; then
++        log "unmounting $dev from $t"
++        $SUDO umount -R "$t" || $SUDO umount -Rl "$t" || true
++      fi
++    fi
++  done
++}
++
++resolve-disk() {
++  local dev parent
++  for L in "$BOOT_LABEL" "$ROOT_LABEL"; do
++    if dev="$(dev_by_label "$L")"; then
++      parent="$(lsblk -nrpo PKNAME "$dev" 2>/dev/null | head -n1)"
++      parent="${parent:-$(lsblk -nrpo NAME "$dev" | sed -E 's/[0-9]+$//;s/p[0-9]+$//')}"
++      echo "$L -> $dev (disk: ${parent:-unknown})"
++    else
++      echo "$L -> (not found)"
++    fi
++  done
++}
+ 
+ # Only run the CLI when executed directly, not when sourced
+ if [[ "${BASH_SOURCE[0]-}" == "$0" ]]; then
+   cmd="${1:-}"
+   case "$cmd" in
+     ensure-mounted)   ensure-mounted ;;
+     ensure-unmounted) ensure-unmounted ;;
+     resolve-disk)     resolve-disk ;;
+     *) echo "usage: tools/devices.sh {ensure-mounted|ensure-unmounted|resolve-disk}" >&2; exit 2 ;;
+   esac
+ fi
+-- 
+2.45.0

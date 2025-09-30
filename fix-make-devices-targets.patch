@@ -1,0 +1,46 @@
+From 9c1a9eb1f2a34d4f8f8f2b0c7e6d3a2b1c9d0eaf Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 17:40:00 -0400
+Subject: [PATCH] Makefile: route ensure-mounted/ensure-unmounted/resolve-disk
+ via tools/devices.sh (no raw umount)
+
+- Avoid brittle direct umount calls that fail with "not mounted".
+- Use the label-driven helper for reliable mount detection and logging.
+
+---
+ Makefile | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 0000000..1111111 100644
+--- a/Makefile
++++ b/Makefile
+@@ -0,0 +1,26 @@
++# --- devices helpers (override) ---
++# These definitions can live at the end of the Makefile; last target wins.
++
++BOOT_LABEL ?= BOOT_MNJRO
++ROOT_LABEL ?= ROOT_MNJRO
++BOOT_MNT   ?= /mnt/sysclone-boot
++ROOT_MNT   ?= /mnt/sysclone-root
++SUDO       ?= sudo
++
++.PHONY: ensure-mounted ensure-unmounted resolve-disk
++
++ensure-mounted:
++	@echo "[make] mounting $(ROOT_LABEL) -> $(ROOT_MNT) and $(BOOT_LABEL) -> $(BOOT_MNT)"
++	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted
++
++ensure-unmounted:
++	@echo "[make] unmounting $(ROOT_MNT) and $(BOOT_MNT) (by label)"
++	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
++
++resolve-disk:
++	@BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  bash tools/devices.sh resolve-disk
+-- 
+2.45.0

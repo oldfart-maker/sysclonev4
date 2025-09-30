@@ -1,0 +1,14 @@
+[Unit]
+Description=SysClone: Network/clock/certs/keyrings bootstrap
+Wants=network-online.target
+After=systemd-timesyncd.service network-pre.target
+Before=network-online.target multi-user.target
+ConditionPathExists=!/var/lib/sysclone/.net-bootstrap.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sysclone-net-bootstrap.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

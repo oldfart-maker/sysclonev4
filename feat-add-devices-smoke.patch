@@ -1,0 +1,85 @@
+From 9e2f7b2b7c1d4a5e8f0a1b2c3d4e5f60718293ab Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 19:05:00 -0400
+Subject: [PATCH] tools/patch-add-devices-smoke.sh: idempotently add
+ devices-smoke target to Makefile
+
+- Adds BOOT_MNT/ROOT_MNT fallbacks if missing.
+- Appends a devices-smoke target only if not already present.
+- Safe to run multiple times.
+
+---
+ tools/patch-add-devices-smoke.sh | 78 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 78 insertions(+)
+ create mode 100755 tools/patch-add-devices-smoke.sh
+
+diff --git a/tools/patch-add-devices-smoke.sh b/tools/patch-add-devices-smoke.sh
+new file mode 100755
+index 0000000..1111111
+--- /dev/null
++++ b/tools/patch-add-devices-smoke.sh
+@@ -0,0 +1,78 @@
++#!/usr/bin/env bash
++set -Eeuo pipefail
++
++mf="Makefile"
++[[ -f "$mf" ]] || { echo "[patch] ERROR: $mf not found"; exit 1; }
++
++changed=0
++
++ensure_line_present() {
++  local pattern="$1" line="$2"
++  if ! grep -Eq "$pattern" "$mf"; then
++    printf '%s\n' "$line" >> "$mf"
++    changed=1
++    echo "[patch] appended: $line"
++  fi
++}
++
++ensure_block_present() {
++  local start_pattern="$1"
++  shift
++  if ! grep -Eq "$start_pattern" "$mf"; then
++    {
++      echo ""
++      echo "# ---------- devices quick smoke test ----------"
++      echo ".PHONY: devices-smoke"
++      echo "devices-smoke:"
++      echo '	@echo "[smoke] unmount (quiet)"; \'
++      echo '	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \'
++      echo '	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \'
++      echo '	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted; \'
++      echo '	echo "[smoke] mount"; \'
++      echo '	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \'
++      echo '	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \'
++      echo '	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted; \'
++      echo '	echo "[smoke] verify"; \'
++      echo '	  findmnt -nr -o SOURCE,TARGET | grep -E "(/mnt/sysclone-(boot|root))" || true; \'
++      echo '	echo "[smoke] unmount (final)"; \'
++      echo '	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \'
++      echo '	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \'
++      echo '	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted'
++    } >> "$mf"
++    changed=1
++    echo "[patch] appended devices-smoke target"
++  fi
++}
++
++echo "[patch] updating $mf"
++
++# If Makefile uses BOOT_MOUNT/ROOT_MOUNT variables, provide BOOT_MNT/ROOT_MNT fallbacks.
++ensure_line_present '^[[:space:]]*BOOT_MNT[[:space:]]*\?=' 'BOOT_MNT ?= $(BOOT_MOUNT)'
++ensure_line_present '^[[:space:]]*ROOT_MNT[[:space:]]*\?=' 'ROOT_MNT ?= $(ROOT_MOUNT)'
++
++# Add devices-smoke target if missing.
++ensure_block_present '^[[:space:]]*devices-smoke:'
++
++if [[ $changed -eq 0 ]]; then
++  echo "[patch] no changes needed"
++else
++  echo "[patch] $mf updated"
++fi
++
++echo "[patch] done"
+-- 
+2.45.0

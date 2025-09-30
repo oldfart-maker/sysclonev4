@@ -1,0 +1,63 @@
+From 0b2e3d1c4a5f6978e9d0c1b2a3f4e5d6c7b8a9f0 Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 20:25:00 -0400
+Subject: [PATCH] Makefile: auto-resolve disk by label in
+ img-expand-rootfs-offline (no new scripts)
+
+- After dd causes re-enumeration, $(DEVICE) may be stale. Resolve the
+  parent disk by reading labels via tools/devices.sh resolve-disk,
+  wait briefly if needed, then expand partition 2 and resize ext4.
+- Pure Makefile override; no new files added.
+
+---
+ Makefile | 40 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 1111111..2222222 100644
+--- a/Makefile
++++ b/Makefile
+@@ -9999,0 +10000,40 @@
++# --- override: expand rootfs offline with disk auto-resolve via labels ---
++.PHONY: img-expand-rootfs-offline
++img-expand-rootfs-offline:
++	@echo "[make] offline expand (auto-resolve by label: $(ROOT_LABEL)/$(BOOT_LABEL))"
++	@set -euo pipefail; \
++	# Try to resolve the parent disk from labels, tolerating post-dd re-enumeration
++	resolve_once() { \
++	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)" ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh resolve-disk; \
++	}; \
++	DISK=""; \
++	for i in $$(seq 1 60); do \
++	  out="$$(resolve_once || true)"; \
++	  line="$$(printf '%s\n' "$$out" | grep -E '^ROOT_' | head -n1 || true)"; \
++	  if [ -z "$$line" ]; then line="$$(printf '%s\n' "$$out" | grep -E '^BOOT_' | head -n1 || true)"; fi; \
++	  if [ -n "$$line" ]; then \
++	    DISK="$$(sed -n 's/.*(disk: \([^)]*\)).*/\1/p' <<<"$$line")"; \
++	  fi; \
++	  if [ -n "$$DISK" ] && [ -b "$$DISK" ]; then break; fi; \
++	  sleep 0.5; \
++	done; \
++	# Fallback to $(DEVICE) if still unresolved and valid
++	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
++	  if [ -n "$(DEVICE)" ] && [ -b "$(DEVICE)" ]; then DISK="$(DEVICE)"; fi; \
++	fi; \
++	if [ -z "$$DISK" ] || [ ! -b "$$DISK" ]; then \
++	  echo "[host-expand] ERROR: could not resolve SD disk by label or $(DEVICE)"; exit 1; \
++	fi; \
++	echo "[make] expanding on $$DISK"; \
++	# Partition suffix 'p' for mmc/nvme, '' for sdX
++	sfx=""; case "$$DISK" in *mmcblk*|*nvme*) sfx="p";; esac; \
++	ROOT_PART="$$DISK$${sfx}2"; \
++	# Ensure kernel sees the table, then grow part 2 to 100%, then resize fs
++	partprobe "$$DISK" || true; sync; \
++	parted -s "$$DISK" unit % print >/dev/null; \
++	parted -s "$$DISK" -- resizepart 2 100%; \
++	partprobe "$$DISK" || true; sync; \
++	e2fsck -fp "$$ROOT_PART" || true; \
++	resize2fs "$$ROOT_PART"; \
++	echo "[make] expand done"
+-- 
+2.45.0

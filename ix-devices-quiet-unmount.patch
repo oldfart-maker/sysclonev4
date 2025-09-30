@@ -1,0 +1,72 @@
+From 4a0b2e4b09a64ef2a3c2d8dbe8f7a1fd2f3a9c10 Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 18:05:00 -0400
+Subject: [PATCH] devices.sh: exact path test via /proc/mounts; quiet umount
+
+- Only unmount when the *exact* mountpoint is present in /proc/mounts.
+- Suppress benign "not mounted" stderr from umount calls.
+- Keep behavior identical otherwise.
+
+---
+ tools/devices.sh | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/tools/devices.sh b/tools/devices.sh
+index 2222222..3333333 100755
+--- a/tools/devices.sh
++++ b/tools/devices.sh
+@@ -12,8 +12,18 @@ SUDO="${SUDO:-sudo}"
+ log(){ printf '[devices] %s\n' "$*"; }
+ err(){ printf '[devices] ERROR: %s\n' "$*" >&2; }
+ die(){ err "$*"; exit 1; }
+-# Exact mount check for a *path* (do not match parent mounts)
+-is_path_mounted(){ mountpoint -q -- "$1"; }
++
++# Exact mount check for a *path*, without matching parents or bind sources.
++# We read /proc/mounts and require the mountpoint to match the 2nd field exactly.
++# The regex ensures we only match whole-field boundaries (tabs/spaces around it).
++is_path_mounted() {
++  local path="$1"
++  # Use awk to match column 2 (mountpoint) exactly.
++  awk -v p="$path" '
++    BEGIN{found=0}
++    $2==p {found=1; exit}
++    END{exit found?0:1}
++  ' /proc/mounts
++}
+ 
+ have(){ command -v "$1" >/dev/null 2>&1; }
+ 
+@@ -77,7 +87,7 @@ ensure_one_mounted() {
+     if [[ -n "$cur_dev" && "$cur_dev" == "$dev" ]]; then
+       # Correct device already mounted at desired path
+       log "already mounted: $mnt"
+       echo "$mnt"; return 0
+     fi
+     log "remounting $mnt to correct device ($dev)"
+-    $SUDO umount -R "$mnt" || $SUDO umount -Rl "$mnt" || true
++    ($SUDO umount -R "$mnt" 2>/dev/null || $SUDO umount -Rl "$mnt" 2>/dev/null || true)
+   fi
+ 
+   $SUDO mkdir -p -- "$mnt"
+@@ -91,7 +101,7 @@ ensure_one_mounted() {
+ lazy_unmount_path() {
+   local path="$1"
+   if is_path_mounted "$path"; then
+     log "unmounting $path"
+-    $SUDO umount -R "$path" || $SUDO umount -Rl "$path" || true
++    ($SUDO umount -R "$path" 2>/dev/null || $SUDO umount -Rl "$path" 2>/dev/null || true)
+   fi
+ }
+ 
+@@ -106,7 +116,7 @@ ensure-unmounted() {
+       local t; t="$(mounted_at "$dev")"
+       if [[ -n "${t:-}" ]]; then
+         log "unmounting $dev from $t"
+-        $SUDO umount -R "$t" || $SUDO umount -Rl "$t" || true
++        ($SUDO umount -R "$t" 2>/dev/null || $SUDO umount -Rl "$t" 2>/dev/null || true)
+       fi
+     fi
+   done
+-- 
+2.45.0

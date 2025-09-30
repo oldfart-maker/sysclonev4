@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+f=tools/payloads/usr-local-bin/scpi
+mkdir -p "$(dirname "$f")"
+cat > "$f" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+need_make() { ! command -v make >/dev/null 2>&1; }
+
+wait_for_clock() {
+  # Wait until NTP says yes OR epoch > 2024-01-01
+  local deadline=$((SECONDS+240))
+  while (( SECONDS < deadline )); do
+    local synced
+    synced=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo "no")
+    local now
+    now=$(date -u +%s 2>/dev/null || echo 0)
+    if [[ "$synced" = "yes" || "$now" -ge 1704067200 ]]; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+bootstrap_make() {
+  echo "[scpi] 'make' not found, bootstrapping…"
+  if ! command -v pacman >/dev/null 2>&1; then
+    echo "[scpi] pacman not found; please install 'make' manually"; exit 1
+  fi
+
+  # Ensure NTP is on and wait for a sane clock (TLS mirrors need correct time)
+  sudo timedatectl set-ntp true || true
+  sudo systemctl restart systemd-timesyncd || true
+  if ! wait_for_clock; then
+    echo "[scpi] WARN: clock may still be wrong; proceeding anyway"
+  fi
+
+  # Keyring sometimes missing/uninitialized on first boot
+  if [[ ! -d /etc/pacman.d/gnupg ]] || [[ ! -r /etc/pacman.d/gnupg/pubring.gpg && ! -d /etc/pacman.d/gnupg/openpgp-revocs.d ]]; then
+    echo "[scpi] initializing pacman keyring…"
+    sudo rm -rf /etc/pacman.d/gnupg
+    sudo pacman-key --init
+    # Populate all the sets that show up in ARM/Manjaro combos
+    sudo pacman-key --populate archlinux manjaro archlinuxarm manjaro-arm 2>/dev/null || \
+    sudo pacman-key --populate archlinux manjaro 2>/dev/null || true
+  fi
+
+  # Update and install
+  sudo pacman -Syyu --noconfirm --needed make
+}
+
+if need_make; then
+  bootstrap_make
+fi
+
+exec make -f /usr/local/share/sysclone/pi.mk "$@"
+EOF
+chmod +x "$f"
+echo "[ok] updated payload: $f"

@@ -1,0 +1,160 @@
+From 1f2d3c4b5d6e7890abcdef1234567890abcdef12 Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 16:00:00 -0400
+Subject: [PATCH] tools/devices.sh: robust label-driven mount/unmount + resolve
+
+* Replace brittle mount helper with a label-first implementation.
+* Mounts the BOOT/ROOT partitions by filesystem label, creating bind
+  mounts at the desired paths if they are already mounted elsewhere.
+* Adds defensive unmount logic (path-first, then device-based).
+* Provides resolve-disk to map labels -> device -> parent disk.
+* No Makefile changes required; existing targets call tools/devices.sh.
+
+---
+ tools/devices.sh | 179 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 179 insertions(+)
+ create mode 100755 tools/devices.sh
+
+diff --git a/tools/devices.sh b/tools/devices.sh
+new file mode 100755
+index 0000000..1111111
+--- /dev/null
++++ b/tools/devices.sh
+@@ -0,0 +1,179 @@
++#!/usr/bin/env bash
++# tools/devices.sh — label-driven mount helper for sysclone
++set -Eeuo pipefail
++
++# Inputs (env-overridable)
++BOOT_LABEL="${BOOT_LABEL:-BOOT_MNJRO}"
++ROOT_LABEL="${ROOT_LABEL:-ROOT_MNJRO}"
++BOOT_MOUNT="${BOOT_MOUNT:-/mnt/sysclone-boot}"
++ROOT_MOUNT="${ROOT_MOUNT:-/mnt/sysclone-root}"
++SUDO="${SUDO:-sudo}"
++
++log(){ printf '%s\n' "::%s" "$*"; }
++err(){ printf '%s\n' "::ERROR $*" >&2; }
++die(){ err "$*"; exit 1; }
++
++have(){ command -v "$1" >/dev/null 2>&1; }
++
++dev_by_label() {
++  # Resolve a block device path by filesystem label (e.g., /dev/mmcblk0p1)
++  local label="$1" p=""
++  if have blkid; then
++    p="$(blkid -L "$label" 2>/dev/null || true)"
++    [[ -n "${p:-}" ]] && readlink -f -- "$p" && return 0
++  fi
++  # Fallback via lsblk LABEL
++  if have lsblk; then
++    p="$(lsblk -rpo NAME,LABEL | awk -v L="$label" '$2==L{print $1; exit}')"
++    [[ -n "${p:-}" ]] && readlink -f -- "$p" && return 0
++  fi
++  return 1
++}
++
++mounted_at() {
++  local dev="$1"
++  findmnt -nr -S "$dev" -o TARGET 2>/dev/null || true
++}
++
++bind_if_elsewhere() {
++  # If dev is mounted elsewhere, create a bind mount at desired mountpoint.
++  local dev="$1" want="$2"
++  local cur; cur="$(mounted_at "$dev")"
++  if [[ -n "$cur" && "$cur" != "$want" ]]; then
++    log "$dev already mounted at $cur; creating bind mount at $want"
++    $SUDO mkdir -p -- "$want"
++    $SUDO mount --bind "$cur" "$want"
++    return 0
++  fi
++  return 1
++}
++
++ensure_one_mounted() {
++  local label="$1" dev mnt fstype
++  dev="$(dev_by_label "$label")" || die "Could not find device with label $label"
++  # Decide mountpoint + fs type
++  if [[ "$label" == "$BOOT_LABEL" ]]; then
++    mnt="$BOOT_MOUNT"; fstype="vfat"
++  else
++    mnt="$ROOT_MOUNT"; fstype="ext4"
++  fi
++  # If already mounted at desired path, nothing to do
++  if [[ -n "$(mounted_at "$dev")" && "$(mounted_at "$dev")" == "$mnt" ]]; then
++    log "$label ($dev) already mounted at $mnt"
++    echo "$mnt"
++    return 0
++  fi
++  # If mounted elsewhere, create bind mount at our desired location
++  if bind_if_elsewhere "$dev" "$mnt"; then
++    echo "$mnt"; return 0
++  fi
++  # Mount fresh
++  $SUDO mkdir -p -- "$mnt"
++  log "mounting $label ($dev) at $mnt"
++  # Avoid specifying -t when autodetect works; only hint if necessary
++  if ! $SUDO mount "$dev" "$mnt" 2>/dev/null; then
++    $SUDO mount -t "$fstype" "$dev" "$mnt"
++  fi
++  echo "$mnt"
++}
++
++ensure-mounted() {
++  ensure_one_mounted "$BOOT_LABEL" >/dev/null
++  ensure_one_mounted "$ROOT_LABEL" >/dev/null
++  # Print final locations for Makefile logging
++  echo "BOOT_MOUNT=$BOOT_MOUNT"
++  echo "ROOT_MOUNT=$ROOT_MOUNT"
++}
++
++lazy_unmount_path() {
++  local path="$1"
++  if mountpoint -q -- "$path"; then
++    log "unmounting $path"
++    $SUDO umount -R "$path" || $SUDO umount -Rl "$path" || true
++  fi
++}
++
++ensure-unmounted() {
++  # Try path-based first (robust when labels changed)
++  lazy_unmount_path "$BOOT_MOUNT"
++  lazy_unmount_path "$ROOT_MOUNT"
++
++  # Also try device-based (in case mounted elsewhere)
++  local dev
++  for L in "$BOOT_LABEL" "$ROOT_LABEL"; do
++    if dev="$(dev_by_label "$L")"; then
++      local targets; targets="$(mounted_at "$dev")"
++      if [[ -n "${targets:-}" ]]; then
++        log "unmounting $dev from $targets"
++        $SUDO umount -R "$targets" || $SUDO umount -Rl "$targets" || true
++      fi
++    fi
++  done
++}
++
++resolve-disk() {
++  local dev parent
++  for L in "$BOOT_LABEL" "$ROOT_LABEL"; do
++    if dev="$(dev_by_label "$L")"; then
++      parent="$(lsblk -nrpo PKNAME "$dev" 2>/dev/null | head -n1)"
++      parent="${parent:-$(lsblk -nrpo NAME "$dev" | sed -E 's/[0-9]+$//;s/p[0-9]+$//')}"
++      echo "$L -> $dev (disk: ${parent:-unknown})"
++    else
++      echo "$L -> (not found)"
++    fi
++  done
++}
++
++# CLI entry
++if [[ "${BASH_SOURCE[0]-}" == "$0" ]]; then
++  case "${1:-}" in
++    ensure-mounted)   ensure-mounted ;;
++    ensure-unmounted) ensure-unmounted ;;
++    resolve-disk)     resolve-disk ;;
++    *) echo "usage: $0 {ensure-mounted|ensure-unmounted|resolve-disk}" >&2; exit 2 ;;
++  esac
++fi
+--
+2.45.0

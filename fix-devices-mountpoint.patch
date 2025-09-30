@@ -1,0 +1,73 @@
+From 35f6f6d3eec94d7b9b1a6a2e0a1b5b1caa12b3b1 Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 17:15:00 -0400
+Subject: [PATCH] devices.sh: use mountpoint(1) for exact-path checks; dedupe
+ mounts output; drop egrep
+
+- Replace findmnt -T path detection with mountpoint -q for exactness.
+- Dedupe mounts listing via sort -u; replace egrep with grep -E.
+- Avoid spurious umount "not mounted" noise.
+
+---
+ tools/devices.sh | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/tools/devices.sh b/tools/devices.sh
+index 1111111..2222222 100755
+--- a/tools/devices.sh
++++ b/tools/devices.sh
+@@ -12,6 +12,10 @@ SUDO="${SUDO:-sudo}"
+ log(){ printf '[devices] %s\n' "$*"; }
+ err(){ printf '[devices] ERROR: %s\n' "$*" >&2; }
+ die(){ err "$*"; exit 1; }
++
++# Exact mount check for a *path* (do not match parent mounts)
++is_path_mounted(){ mountpoint -q -- "$1"; }
++
+ have(){ command -v "$1" >/dev/null 2>&1; }
+ 
+ dev_by_label() {
+@@ -53,10 +57,12 @@ ensure_one_mounted() {
+   fi
+ 
+   # If the target path is mounted but not our device, unmount and continue.
+-  if findmnt -nr -T "$mnt" >/dev/null 2>&1; then
+-    local cur_dev; cur_dev="$(findmnt -nr -T "$mnt" -o SOURCE || true)"
+-    if [[ "$cur_dev" == "$dev" ]]; then
+-      log "already mounted: $mnt"
++  if is_path_mounted "$mnt"; then
++    local cur_dev
++    cur_dev="$(findmnt -nr -T "$mnt" -o SOURCE || true)"
++    if [[ -n "$cur_dev" && "$cur_dev" == "$dev" ]]; then
++      # Correct device already mounted at desired path
++      log "already mounted: $mnt"
+       echo "$mnt"; return 0
+     fi
+     log "remounting $mnt to correct device ($dev)"
+@@ -71,9 +77,17 @@ ensure_one_mounted() {
+   echo "$mnt"
+ }
+ 
++# Exact unmount of a *path* only
+ lazy_unmount_path() {
+   local path="$1"
+-  if findmnt -nr -T "$path" >/dev/null 2>&1; then
++  if is_path_mounted "$path"; then
+     log "unmounting $path"
+     $SUDO umount -R "$path" || $SUDO umount -Rl "$path" || true
+   fi
+ }
+ 
+ ensure-mounted() {
+   log "ensure-mounted: $ROOT_LABEL -> $ROOT_MOUNT and $BOOT_LABEL -> $BOOT_MOUNT"
+   ensure_one_mounted "$ROOT_LABEL" >/dev/null
+   ensure_one_mounted "$BOOT_LABEL"  >/dev/null
+-  log "mounts:"; findmnt -nr -o SOURCE,TARGET | grep -E 'sysclone-(boot|root)|BOOT|ROOT' || true
++  log "mounts:"
++  # Show unique lines only; avoid deprecated egrep
++  findmnt -nr -o SOURCE,TARGET \
++    | grep -E 'sysclone-(boot|root)|BOOT|ROOT' \
++    | sort -u || true
+ }
+-- 
+2.45.0

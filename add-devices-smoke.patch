@@ -1,0 +1,38 @@
+From 1cb6b2e0b9a24d219f7c0d2a6bd6b2c1a7e3f001 Mon Sep 17 00:00:00 2001
+From: SysClone Helper <sysclone@example.com>
+Date: Mon, 29 Sep 2025 18:40:00 -0400
+Subject: [PATCH] Makefile: add devices-smoke target (mount -> verify -> unmount)
+
+---
+ Makefile | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 1111111..2222222 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,3 +1,24 @@
++# ---------- devices quick smoke test ----------
++.PHONY: devices-smoke
++devices-smoke:
++	@echo "[smoke] unmount (quiet)"; \
++	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted; \
++	echo "[smoke] mount"; \
++	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh ensure-mounted; \
++	echo "[smoke] verify"; \
++	  findmnt -nr -o SOURCE,TARGET | grep -E '(/mnt/sysclone-(boot|root))' || true; \
++	echo "[smoke] unmount (final)"; \
++	  BOOT_LABEL="$(BOOT_LABEL)" ROOT_LABEL="$(ROOT_LABEL)" \
++	  BOOT_MOUNT="$(BOOT_MNT)"   ROOT_MOUNT="$(ROOT_MNT)" \
++	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
++
++# NOTE: If your Makefile uses BOOT_MOUNT/ROOT_MOUNT (not BOOT_MNT/ROOT_MNT),
++#       define BOOT_MNT ?= $(BOOT_MOUNT) and ROOT_MNT ?= $(ROOT_MOUNT) near your vars.
++
+ # … existing content …
+-- 
+2.45.0
