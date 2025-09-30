@@ -16,3 +16,4 @@ cache/
 Makefile.new
 tools/*.bak*
 *.~undo-tree~
+.sysclone.env

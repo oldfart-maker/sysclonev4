@@ -70,7 +70,6 @@ show-config:  ## Show important variables
 	@echo "IMG_XZ     = $(IMG_XZ)"
 	@echo "IMG_RAW    = $(IMG_RAW)"
 	@echo "DEVICE     = $(DEVICE_EFFECTIVE)"
-	@echo "SD_DISK    = $(DEVICE)"
 	@echo "SD_ROOT    = $(ROOT)"
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "BOOT_LABEL = $(BOOT_LABEL)"
@@ -326,5 +325,8 @@ devices-smoke:
 
 .PHONY: img-expand-rootfs-offline ## manual expand: requires DEVICE=/dev/sdX
 img-expand-rootfs-offline:
-	@echo "[make] offline expand on $(DEVICE)"
-	@sudo DEVICE="$(DEVICE)" bash tools/expand-rootfs-manual.sh
+	@dev="$${ROOT:-$(DEVICE_EFFECTIVE)}"; \
+	[ -n "$$dev" ] || { echo "[expand] ERROR: set ROOT=/dev/sdX2 or DEVICE=/dev/sdX"; exit 1; }; \
+	echo "[make] offline expand on $$dev"; \
+	sudo env DEVICE="$$dev" bash tools/expand-rootfs-manual.sh
+
