@@ -309,8 +309,8 @@ devices-smoke:
 # --- manual-only expand: pass DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
 .PHONY: img-expand-rootfs-offline
 
-# --- manual-only expand: requires DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
-.PHONY: img-expand-rootfs-offline
+
+.PHONY: img-expand-rootfs-offline ## manual expand: requires DEVICE=/dev/sdX
 img-expand-rootfs-offline:
 	@echo "[make] offline expand on $(DEVICE)"
 	@sudo DEVICE="$(DEVICE)" bash tools/expand-rootfs-manual.sh
