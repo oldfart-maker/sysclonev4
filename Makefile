@@ -74,6 +74,7 @@ show-config:  ## Show important variables
 	@echo "BOOT_MOUNT = $(BOOT_MOUNT)"
 	@echo "BOOT_LABEL = $(BOOT_LABEL)"
 	@echo "ROOT_LABEL = $(ROOT_LABEL)"
+	@echo "HM_USER    = $(HM_USER)"
 	@echo "WIFI_SSID  = $(WIFI_SSID)"
 	@echo "WIFI_PASS  = $(if $(strip $(WIFI_PASS)),(set),(unset))"
 # -------- Image workflow --------
