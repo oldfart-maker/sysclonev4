@@ -19,6 +19,7 @@ install -d -m 755 \
 cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export HOME=/root
 STAMP="/var/lib/sysclone/.layer3-home-done"
 if [[ -f "$STAMP" ]]; then echo "[layer3] already applied"; exit 0; fi
 ENV_FILE="/etc/sysclone/firstboot.env"
@@ -32,8 +33,8 @@ fi
 
 if [[ ! -d /nix ]]; then
   log "installing nix (multi-user, daemon)"
-  if ! (curl -fsSL https://install.determinate.systems/nix | sh -s -- install --daemon); then
-    sh <(curl -fsSL https://nixos.org/nix/install) --daemon
+  if ! (curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm --daemon); then
+    sh <(curl -fsSL https://nixos.org/nix/install) --daemon --yes
   fi
 fi
 
