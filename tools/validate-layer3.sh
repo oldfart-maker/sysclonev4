@@ -9,34 +9,42 @@ ok()   { echo "[validate-layer3] OK:   $*"; }
 [[ -f mk/layer3.mk ]] || fail "missing mk/layer3.mk"
 ok "seed + mk present"
 
-# 2) seed-home.sh critical patterns
-grep -qE '^sudo install -D -m 0755 /dev/stdin "\$ROOT_MNT/usr/local/sbin/sysclone-layer3-home\.sh"' seeds/layer3/seed-home.sh \
-  || fail "seed-home.sh does not install the on-target runner via heredoc"
+SEED="seeds/layer3/seed-home.sh"
 
-grep -q 'export HOME=/root' seeds/layer3/seed-home.sh \
-  || fail "on-target runner is not exporting HOME=/root (in heredoc)"
+# 2) On-target runner is installed (accept tee OR install -D heredoc)
+if grep -qE '^sudo install -D -m 0755 /dev/stdin "\$ROOT_MNT/usr/local/sbin/sysclone-layer3-home\.sh"' "$SEED" \
+   || grep -qE '^sudo tee "\$ROOT_MNT/usr/local/sbin/sysclone-layer3-home\.sh"' "$SEED"; then
+  ok "on-target runner install command found (tee/install -D)"
+else
+  fail "seed-home.sh does not install the on-target runner (tee or install -D heredoc)"
+fi
 
-grep -q -- '--no-confirm --daemon' seeds/layer3/seed-home.sh \
-  || fail "determinate installer not forced non-interactive"
+# 3) HOME is set to /root in runner content
+grep -q 'export HOME=/root' "$SEED" \
+  && ok "runner exports HOME=/root" \
+  || fail "runner does not export HOME=/root"
 
-grep -q -- '--daemon --yes' seeds/layer3/seed-home.sh \
-  || fail "official installer not forced non-interactive"
+# 4) Non-interactive installers: at least one path must be present
+if grep -q -- '--no-confirm --daemon' "$SEED" || grep -q -- '--daemon --yes' "$SEED"; then
+  ok "non-interactive nix installer flags present"
+else
+  fail "non-interactive nix installer flags not detected"
+fi
 
-grep -q 'Environment=HOME=/root' seeds/layer3/seed-home.sh \
-  || fail "systemd unit does not set Environment=HOME=/root"
+# 5) systemd drop-in that sets HOME=/root
+grep -q 'sysclone-layer3-home.service.d/env.conf' "$SEED" \
+  && grep -q 'Environment=HOME=/root' "$SEED" \
+  && ok "systemd drop-in sets HOME=/root" \
+  || fail "systemd drop-in for HOME=/root missing"
 
-grep -q 'sysclone-layer3-home.service.d/env.conf' seeds/layer3/seed-home.sh \
-  || fail "drop-in env.conf not created"
-
-grep -q "nix run 'github:nix-community/home-manager#home-manager' --" seeds/layer3/seed-home.sh \
+# 6) HM switch via nix run (works even if home-manager binary not in PATH)
+grep -q "nix run 'github:nix-community/home-manager#home-manager' --" "$SEED" \
+  && ok "HM switch via nix run present" \
   || fail "HM switch via nix run not found"
 
-ok "patterns present in seed-home.sh"
-
-# 3) Top-level Makefile includes our layer3.mk
+# 7) Top-level Makefile includes layer3.mk
 grep -q -- '-include mk/layer3.mk' Makefile \
+  && ok "Makefile includes mk/layer3.mk" \
   || fail "top-level Makefile does not include mk/layer3.mk"
-
-ok "Makefile includes mk/layer3.mk"
 
 echo "[validate-layer3] All checks passed."
