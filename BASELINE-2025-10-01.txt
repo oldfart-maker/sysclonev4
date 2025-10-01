@@ -1,0 +1,11 @@
+IMG_URL    = https://github.com/manjaro-arm/rpi4-images/releases/download/20250915/Manjaro-ARM-minimal-rpi4-20250915.img.xz
+CACHE_DIR  = cache
+IMG_XZ     = cache/Manjaro-ARM-minimal-rpi4-20250915.img.xz
+IMG_RAW    = cache/Manjaro-ARM-minimal-rpi4-20250915.img
+DEVICE     = /dev/sdc
+SD_ROOT    = /dev/sdc2
+BOOT_MOUNT = /run/media/username/BOOT
+BOOT_LABEL = BOOT_MNJRO
+ROOT_LABEL = ROOT_MNJRO
+WIFI_SSID  = Hangout
+WIFI_PASS  = (set)
