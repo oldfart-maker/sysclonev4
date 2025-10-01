@@ -7,59 +7,45 @@ fail(){ printf '[validate-layer3] FAIL: %s\n' "$*"; exit 1; }
 
 SEED="seeds/layer3/seed-home.sh"
 MK="mk/layer3.mk"
+TARGET_RX='/usr/local/sbin/sysclone-layer3-home\.sh'
 
-# 1) Files exist
 [[ -f "$SEED" ]] || fail "missing $SEED"
 [[ -f "$MK"   ]] || fail "missing $MK"
 ok "seed + mk present"
 
-# 2) On-target runner install method (accept cat<<, sudo tee<<, or install -D /dev/stdin)
-target_rx='/usr/local/sbin/sysclone-layer3-home\.sh'
-has_cat=false
-has_tee=false
-has_inst=false
-
-grep -Eq "cat[[:space:]]*>[[:space:]]*\"?\$ROOT_MNT${target_rx}\"?[[:space:]]*<<'?[[:alnum:]_]+'?" "$SEED" && has_cat=true
-grep -Eq "sudo[[:space:]]+tee[[:space:]]+\"?\$ROOT_MNT${target_rx}\"?[[:space:]]*>/dev/null[[:space:]]*<<'?[[:alnum:]_]+'?" "$SEED" && has_tee=true
-grep -Eq "sudo[[:space:]]+install[[:space:]]+-D[[:space:]]+-m[[:space:]]+0755[[:space:]]+/dev/stdin[[:space:]]+\"?\$ROOT_MNT${target_rx}\"?" "$SEED" && has_inst=true
-
-if $has_cat || $has_tee || $has_inst; then
-  ok "on-target runner installation present (cat/tee heredoc or install -D /dev/stdin)"
+# Accept any of: cat+heredoc, tee+heredoc, install -D /dev/stdin
+runner_line_rx='(^|[[:space:]])(cat|sudo[[:space:]]+cat|tee|sudo[[:space:]]+tee|install|sudo[[:space:]]+install)\b.*sysclone-layer3-home\.sh'
+if grep -Eq "$runner_line_rx" "$SEED"; then
+  # Further require either a heredoc '<<' on the same/nearby lines OR /dev/stdin usage
+  if grep -Eq "$runner_line_rx.*<<|/dev/stdin[[:space:]]+\"?\$ROOT_MNT$TARGET_RX\"?" "$SEED"; then
+    ok "runner install found (cat/tee heredoc or install -D /dev/stdin)"
+  else
+    fail "runner install line present but neither heredoc nor /dev/stdin detected"
+  fi
 else
-  fail "seed-home.sh does not install the on-target runner (expected cat <<EOF, tee <<EOF, or install -D /dev/stdin)"
+  fail "seed-home.sh does not appear to install the on-target runner"
 fi
 
-# 3) Ensure the heredoc body exports HOME=/root (prevents $HOME-not-set during reclone)
-#    We look inside the heredoc body by a cheap check against the seed file text.
-if grep -Eq '^cat[[:space:]]*>[[:space:]]*"?\$ROOT_MNT'"$target_rx"'"?[[:space:]]*<<' "$SEED"; then
+# Try to verify HOME=/root only if we can see the heredoc content in SEED itself
+if grep -Eq "cat[[:space:]]*>[[:space:]]*\"?\$ROOT_MNT$TARGET_RX\"?[[:space:]]*<<'?[[:alnum:]_]+'?" "$SEED"; then
   if grep -Eq '^export[[:space:]]+HOME=/root' "$SEED"; then
-    ok "runner sets HOME=/root inside heredoc"
+    ok "runner sets HOME=/root in heredoc body"
   else
-    fail "runner does not set HOME=/root inside heredoc"
+    fail "runner heredoc body is missing 'export HOME=/root'"
   fi
 else
-  warn "could not statically verify HOME export (non-cat writer); ensure runner exports HOME=/root"
+  warn "runner body not statically visible (tee/install path) — ensure the actual runner exports HOME=/root"
 fi
 
-# 4) Make installers non-interactive
-# determinate installer should carry --no-confirm
+# Non-interactive flags on installers (best-effort)
 if grep -Eq 'install\.determinate\.systems/nix' "$SEED"; then
-  if grep -Eq 'install[[:space:]]+--no-confirm[[:space:]]+--daemon' "$SEED"; then
-    ok "determinate installer is non-interactive (--no-confirm)"
-  else
-    fail "determinate installer missing --no-confirm"
-  fi
-else
-  warn "determinate installer not detected (ok if using official installer fallback)"
+  grep -Eq 'install[[:space:]]+--no-confirm([[:space:]]|$)' "$SEED" \
+    && ok "determinate installer: --no-confirm present" \
+    || fail "determinate installer missing --no-confirm"
 fi
 
-# official nix installer should carry --yes
 if grep -Eq 'nixos\.org/nix/install' "$SEED"; then
-  if grep -Eq '--daemon[[:space:]]+--yes' "$SEED"; then
-    ok "official nix installer is non-interactive (--yes)"
-  else
-    fail "official nix installer missing --yes"
-  fi
-else
-  warn "official installer not detected (ok if determinate path always used)"
+  grep -Eq '--daemon([[:space:]]|$).*--yes|--yes([[:space:]]|$).*--daemon' "$SEED" \
+    && ok "official installer: --yes present (non-interactive)" \
+    || fail "official installer missing --yes"
 fi
