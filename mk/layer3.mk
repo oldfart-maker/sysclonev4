@@ -10,7 +10,7 @@ clear-layer3-stamps: ensure-mounted ## Clear L3 stamp on target rootfs
 
 seed-layer3-home: ensure-mounted ## Stage Nix + Home Manager oneshot on target
 	@echo "[layer3] seeding nix + home-manager oneshot"
-	sudo env ROOT_MNT="$(ROOT_MNT)" USERNAME="$(HM_USER)" bash tools/seed-layer3-home.sh
+	sudo env ROOT_MNT="$(ROOT_MNT)" USERNAME="$(HM_USER)" bash seeds/layer3/seed-home.sh
 
 seed-layer3-all: ensure-mounted ## Stage HM and unmount
 	@set -euo pipefail; \
@@ -20,8 +20,7 @@ seed-layer3-all: ensure-mounted ## Stage HM and unmount
 	  echo "[layer3] aggregate done"
 
 # Persist a new HM user into the root Makefile (stable-var pattern).
-# Usage: make set-hm-user HM_USER=mike
-set-hm-user:
+set-hm-user: ## Usage: make set-hm-user HM_USER=mike
 	@set -euo pipefail; \
 	test -n "$(HM_USER)"; \
 	if grep -qE '^[[:space:]]*HM_USER[[:space:]]*=.*' Makefile; then \
