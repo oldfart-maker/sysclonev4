@@ -1,102 +1,67 @@
 #!/usr/bin/env bash
-# Fail on error; defer -u until after we source env
 set -Eeuo pipefail
 
 ENV_FILE="/etc/sysclone/firstboot.env"
-if [ -f "$ENV_FILE" ]; then
+if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   . "$ENV_FILE"
 fi
-# Now treat unbound vars as errors
 set -u
 
-# Safe defaults
 : "${WIFI_SSID:=}"
 : "${WIFI_PASS:=}"
 : "${USERNAME:=username}"
 : "${USERPASS:=username}"
-#!/usr/bin/env bash
-set -Eeuo pipefail
 
-log() { printf '%s %s\n' "[L1]" "$*"; }
-
-usage() {
-  cat <<USAGE
-Usage: $0 [--wifi-ssid SSID --wifi-pass PASS]
-  --wifi-ssid   SSID for iwd
-  --wifi-pass   Passphrase for iwd
-USAGE
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --wifi-ssid) WIFI_SSID="${2-}"; shift 2;;
-    --wifi-pass) WIFI_PASS="${2-}"; shift 2;;
-    -h|--help) usage; exit 0;;
-    *) log "WARN: unknown arg: $1"; shift;;
-  esac
-done
+log(){ printf '%s %s\n' "[L1]" "$*"; }
 
 provision_wifi() {
   [[ -z "$WIFI_SSID" ]] && return 0
-  if [[ -z "$WIFI_PASS" ]]; then
-    log "--wifi-ssid set but --wifi-pass missing"
-    return 1
-  fi
+  [[ -z "$WIFI_PASS" ]] && { log "--wifi-ssid set but --wifi-pass missing"; return 1; }
 
   install -d -m 700 /var/lib/iwd
-  cat > "/var/lib/iwd/${WIFI_SSID}.psk" <<EOFPSK
+  cat > "/var/lib/iwd/${WIFI_SSID}.psk" <<EOF
 [Security]
 Passphrase=${WIFI_PASS}
-EOFPSK
+EOF
   chmod 0600 "/var/lib/iwd/${WIFI_SSID}.psk"
-  log "provisioned iwd PSK for '${WIFI_SSID}'"
-}
-
-connect_wifi() {
-  # Only attempt when we have creds
-  [[ -z "$WIFI_SSID" ]] && return 0
-  [[ -z "$WIFI_PASS" ]] && { log "--wifi-ssid set but --wifi-pass missing (cannot connect)"; return 1; }
-
-  # Make sure iwd is running
-  sudo systemctl enable --now iwd >/dev/null 2>&1 || true
-
-  # Pick first wlan interface
-  local WLAN_IF
-  WLAN_IF="$(iw dev | awk '/Interface/ {print $2; exit}')"
-  if [[ -z "$WLAN_IF" ]]; then
-    log "no wlan interface found (iw dev empty)"; return 1
-  fi
-
-  # Connect using iwctl (non-interactive)
-  if sudo iwctl --passphrase "$WIFI_PASS" station "$WLAN_IF" connect "$WIFI_SSID"; then
-    log "iwctl connect issued on $WLAN_IF to '$WIFI_SSID'"
+  systemctl enable --now iwd >/dev/null 2>&1 || true
+  # best effort connect
+  if iw dev | awk '/Interface/ {print $2; exit}' | xargs -r -I{} iwctl --passphrase "$WIFI_PASS" station {} connect "$WIFI_SSID"; then
+    log "wifi connect issued"
   else
-    log "iwctl connect failed on $WLAN_IF to '$WIFI_SSID'"
-    return 1
+    log "wifi connect failed (continuing)"
   fi
 }
 
-main() {
-  log "starting minimal first-boot"
-  provision_wifi
-  connect_wifi
-  log "done"
-}
+ensure_user_and_seatd() {
+  # create user if missing
+  if ! id -u "$USERNAME" >/dev/null 2>&1; then
+    log "creating user '$USERNAME' (wheel)"
+    useradd -m -G wheel -s /bin/bash "$USERNAME"
+    echo "${USERNAME}:${USERPASS}" | chpasswd
+    # enable wheel sudoers if commented
+    sed -i -E 's/^\s*#\s*(%wheel\s+ALL=\(ALL:ALL\)\s+ALL)/\1/' /etc/sudoers
+  fi
 
-main "$@"
-
-# --- seatd-ensure-start (idempotent) -----------------------------------------
-# Ensure first user is in required groups and seatd is running (if installed)
-{
-  USER_NAME="${USERNAME:-username}"
+  # groups needed for Wayland/seatd
   for g in seat input video render; do
     getent group "$g" >/dev/null 2>&1 || groupadd -r "$g" || true
   done
-  usermod -aG seat,input,video,render "$USER_NAME" || true
+  usermod -aG seat,input,video,render "$USERNAME" || true
+
+  # seatd if available
   if systemctl list-unit-files --no-legend | grep -q '^seatd\.service'; then
     systemctl enable --now seatd.service || true
   fi
-  log "seatd/groups ensured for $USER_NAME"
+
+  log "seatd/groups ensured for $USERNAME"
 }
-# --- seatd-ensure-end ---------------------------------------------------------
+
+main() {
+  log "first-boot start"
+  provision_wifi || true
+  ensure_user_and_seatd
+  log "first-boot done"
+}
+main "$@"
