@@ -49,3 +49,37 @@ if grep -Eq 'nixos\.org/nix/install' "$SEED"; then
     && ok "official installer: --yes present (non-interactive)" \
     || fail "official installer missing --yes"
 fi
+
+# Non-interactive flags on installers (best-effort)
+
+if grep -Eq -- 'install.determinate.systems/nix' ""; then
+
+  grep -Eq -- 'install[[:space:]]+--no-confirm([[:space:]]|1000 3 90 98 108 983 985 986 988 990 991 992 995 998 1000' "" \
+
+    && ok "determinate installer: --no-confirm present" \
+
+    || fail "determinate installer missing --no-confirm"
+
+fi
+
+
+
+if grep -Eq -- 'nixos.org/nix/install' ""; then
+
+  # Accept either on the same line (most common) or anywhere in file, but require it if the installer is used
+
+  if grep -Eq -- 'nixos.org/nix/install.*--yes' "" || \
+
+     grep -Eq -- '--yes' ""; then
+
+    ok "official installer: --yes present (non-interactive)"
+
+  else
+
+    fail "official installer missing --yes"
+
+  fi
+
+fi
+
+  
