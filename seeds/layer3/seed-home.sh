@@ -91,6 +91,9 @@ sudo -u "$USERNAME" env -i \
 touch "$STAMP"; log "done"
 EOSRUN
 
+HM_BAKE_USER="${HM_USER:-${USERNAME:-username}}"
+sed -i "s/__HM_USER__/${HM_BAKE_USER//\//\/}/" \
+  "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 
 # systemd unit (ensure HOME=/root for the oneshot)
