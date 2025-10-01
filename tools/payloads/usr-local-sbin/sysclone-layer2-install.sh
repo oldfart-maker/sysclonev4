@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+wait_pacman() {
+  local t=0;
+  while [[ -e /var/lib/pacman/db.lck ]] || pgrep -x pacman >/dev/null; do
+    ((t++)); if (( t>300 )); then echo "[layer2-install] timeout waiting for pacman lock"; return 1; fi
+    sleep 1;
+  done
+}
+
 set -euo pipefail
 
 STEP=0
@@ -41,6 +50,7 @@ pacman-key --populate archlinux manjaro manjaro-arm archlinuxarm || true
 # ---------- mirrors + db ----------
 next; log "refresh mirrors + db"
 if command -v pacman-mirrors >/dev/null 2>&1; then
+wait_pacman || exit 1
   pacman-mirrors --fasttrack 5 --api --protocol https || true
 fi
 $PAC -Syy || true
