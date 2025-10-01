@@ -320,11 +320,8 @@ devices-smoke:
 	  SUDO="$(SUDO)" bash tools/devices.sh ensure-unmounted
 
 # --- manual-only expand: pass DEVICE=/dev/sdX (or /dev/mmcblk0, /dev/nvme0n1) ---
-.PHONY: img-expand-rootfs-offline
-
-
-.PHONY: img-expand-rootfs-offline ## manual expand: requires DEVICE=/dev/sdX
-img-expand-rootfs-offline:
+.PHONY: img-expand-rootfs-offline 
+img-expand-rootfs-offline: ## manual expand: requires DEVICE=/dev/sdX
 	@dev="$${ROOT:-$(DEVICE_EFFECTIVE)}"; \
 	[ -n "$$dev" ] || { echo "[expand] ERROR: set ROOT=/dev/sdX2 or DEVICE=/dev/sdX"; exit 1; }; \
 	echo "[make] offline expand on $$dev"; \
