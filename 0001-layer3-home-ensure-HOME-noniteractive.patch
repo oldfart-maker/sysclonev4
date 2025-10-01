@@ -1,0 +1,96 @@
+*** a/seeds/layer3/seed-home.sh
+--- b/seeds/layer3/seed-home.sh
+@@
+ #!/usr/bin/env bash
+ set -Eeuo pipefail
+ 
+ ROOT_MNT="${ROOT_MNT:-/mnt/sysclone-root}"
+ HM_USER="${HM_USER:-username}"
+ HM_DIR_REL="/etc/sysclone/home"
+@@
+ echo "[layer3] seeding Home Manager oneshot into target root at $ROOT_MNT"
+ 
+ # 1) On-target runner (ensures HOME and non-interactive installs)
+ sudo install -D -m 0755 /dev/stdin "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOSH'
+ #!/usr/bin/env bash
+ set -Eeuo pipefail
++export HOME=/root
++
+ STAMP="/var/lib/sysclone/.layer3-home-done"
+ if [[ -f "$STAMP" ]]; then echo "[layer3] already applied"; exit 0; fi
+ 
+ ENV_FILE="/etc/sysclone/firstboot.env"
+ if [[ -r "$ENV_FILE" ]]; then . "$ENV_FILE"; fi
+ : "${USERNAME:=username}"; export USERNAME
+@@
+ # Ensure curl present
+ if ! command -v curl >/dev/null 2>&1; then
+   echo "[layer3] installing curl (pacman)"; pacman --noconfirm -Sy curl ca-certificates || true
+ fi
+ 
+ # Install Nix (multi-user daemon), fully non-interactive
+ if [[ ! -d /nix ]]; then
+   echo "[layer3] installing nix (multi-user, daemon)"
+-  if ! (curl -fsSL https://install.determinate.systems/nix | sh -s -- install --daemon); then
+-    sh <(curl -fsSL https://nixos.org/nix/install) --daemon
++  if ! (curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm --daemon); then
++    sh <(curl -fsSL https://nixos.org/nix/install) --daemon --yes
+   fi
+ fi
+ 
+ # Load nix profile for this shell
+ if [[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
+   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+ fi
+@@
+ export NIX_CONFIG="experimental-features = nix-command flakes"
+ USER_PATH="/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin"
+ 
+ echo "[layer3] home-manager switch for $USERNAME via nix run"
+ sudo -u "$USERNAME" env -i \
+   HOME="/home/$USERNAME" \
++  USER="$USERNAME" \
++  LOGNAME="$USERNAME" \
+   PATH="$USER_PATH" \
+   XDG_CACHE_HOME="/home/$USERNAME/.cache" \
+   XDG_CONFIG_HOME="/home/$USERNAME/.config" \
+   XDG_STATE_HOME="/home/$USERNAME/.local/state" \
+   NIX_CONFIG="$NIX_CONFIG" \
+   nix run 'github:nix-community/home-manager#home-manager' -- \
+     switch --flake "/etc/sysclone/home#${USERNAME}"
+ 
+ touch "$STAMP"; echo "[layer3] done"
+ EOSH
+ 
+ # 2) Unit file (if not already present)
+ sudo install -D -m 0644 /dev/stdin "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'EOUNIT'
+ [Unit]
+ Description=SysClone Layer3: Install Nix + Home Manager and apply home config
+ After=network-online.target
+ Wants=network-online.target
+@@
+ [Service]
+ Type=oneshot
+ ExecStart=/usr/local/sbin/sysclone-layer3-home.sh
++# Ensure HOME for installers that require it
++Environment=HOME=/root
+ RemainAfterExit=yes
+ 
+ [Install]
+ WantedBy=multi-user.target
+ EOUNIT
+ 
++# 3) Also drop-in env to be extra-safe (systemd precedence is fine)
++sudo install -d -m 0755 "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service.d"
++sudo install -D -m 0644 /dev/stdin "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service.d/env.conf" <<'EOENV'
++[Service]
++Environment=HOME=/root
++EOENV
++
+ # 4) Seed HM flake directory (created earlier in the workflow)
+ sudo install -d -m 0755 "$ROOT_MNT$HM_DIR_REL"
+ 
+ # 5) Enable unit
+ sudo chroot "$ROOT_MNT" /bin/sh -c 'systemctl daemon-reload && systemctl enable sysclone-layer3-home.service'
+ 
+ echo "[layer3] seed complete"

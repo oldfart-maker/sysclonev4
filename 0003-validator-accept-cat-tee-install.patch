@@ -1,0 +1,46 @@
+From aaaaaaaa Mon Sep 17 00:00:00 2001
+Subject: validator: accept cat+heredoc, tee+heredoc, and install -D /dev/stdin
+
+---
+ tools/validate-layer3.sh | 30 +++++++++++++++++++++++-------
+ 1 file changed, 23 insertions(+), 7 deletions(-)
+
+diff --git a/tools/validate-layer3.sh b/tools/validate-layer3.sh
+index 1111111..2222222 100755
+--- a/tools/validate-layer3.sh
++++ b/tools/validate-layer3.sh
+@@ -1,10 +1,26 @@
+ #!/usr/bin/env bash
+ set -Eeuo pipefail
+ 
+-ok(){   printf '[validate-layer3] OK:   %s\n' "$*"; }
+-warn(){ printf '[validate-layer3] WARN: %s\n' "$*"; }
+-fail(){ printf '[validate-layer3] FAIL: %s\n' "$*"; exit 1; }
++ok(){   printf '[validate-layer3] OK:   %s\n' "$*"; }
++warn(){ printf '[validate-layer3] WARN: %s\n' "$*"; }
++fail(){ printf '[validate-layer3] FAIL: %s\n' "$*"; exit 1; }
+ 
+ SEED="seeds/layer3/seed-home.sh"
+ MK="mk/layer3.mk"
+ 
+ # --- 1) Files exist ---
+ [[ -f "$SEED" ]] || fail "missing $SEED"
+ [[ -f "$MK"   ]] || fail "missing $MK"
+ ok "seed + mk present"
+ 
+-# --- … old writer check removed …
++# --- 2) Writer style: accept cat+heredoc, tee+heredoc, or install -D /dev/stdin
++target_rx='/usr/local/sbin/sysclone-layer3-home\.sh'
++has_cat=false
++has_tee=false
++has_inst=false
++
++grep -Eq "cat[[:space:]]*>[[:space:]]*\"?\$ROOT_MNT${target_rx}\"?[[:space:]]*<<'?[[:alnum:]_]+'?" "$SEED" && has_cat=true
++grep -Eq "sudo[[:space:]]+tee[[:space:]]+\"?\$ROOT_MNT${target_rx}\"?[[:space:]]*>/dev/null[[:space:]]*<<'?[[:alnum:]_]+'?" "$SEED" && has_tee=true
++grep -Eq "sudo[[:space:]]+install[[:space:]]+-D[[:space:]]+-m[[:space:]]+0755[[:space:]]+/dev/stdin[[:space:]]+\"?\$ROOT_MNT${target_rx}\"?" "$SEED" && has_inst=true
++
++if $has_cat || $has_tee || $has_inst; then
++  ok "on-target runner installation present (cat/tee heredoc or install -D /dev/stdin)"
++else
++  fail "seed-home.sh does not install the on-target runner (expected cat <<EOF, tee <<EOF, or install -D /dev/stdin)"
++fi

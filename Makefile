@@ -59,10 +59,6 @@ DEVICE_EFFECTIVE := $(or $(strip $(DEVICE)),$(shell test -f .cache/sysclonev4/la
 BOOT_MOUNT ?= /run/media/$(USER)/BOOT
 CONFIRM    ?=
 
-# -------- Help --------
-# List any "target: ## description" (auto-discovered)
-help:  ## Show available targets + param hints (use: make help TARGET=name)
-	@python3 tools/mkhelp.py $(firstword $(MAKEFILE_LIST)) "$(TARGET)"
 # -------- Introspection --------
 show-config:  ## Show important variables
 	@echo "IMG_URL    = $(IMG_URL)"
