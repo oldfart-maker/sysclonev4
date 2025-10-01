@@ -1,6 +1,6 @@
 .PHONY: clear-layer3-stamps seed-layer3-home seed-layer3-all set-hm-user
 
-# Stable user for Home Manager on the target
+# Stable user for Home Manager on the target (override per-call: HM_USER=mike make …)
 HM_USER ?= username
 
 ## Layer 3 (Home Manager on Arch target)
