@@ -331,3 +331,12 @@ img-expand-rootfs-offline: ## manual expand: requires DEVICE=/dev/sdX
 
 -include mk/layer3.mk
 HM_USER = username
+
+# -------- Aggregated help across all included makefiles --------
+help-all:  ## Show targets from ALL parsed makefiles (use: make help-all TARGET=<filter>)
+	@python3 tools/mkhelp_all.py "$(TARGET)" $(MAKEFILE_LIST)
+
+# -------- Override: help aggregates across ALL parsed makefiles --------
+.PHONY: help
+help:  ## Show available targets + param hints (use: make help TARGET=name)
+	@python3 tools/mkhelp_all.py "$(TARGET)" $(MAKEFILE_LIST)
