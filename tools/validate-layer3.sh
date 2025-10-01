@@ -64,22 +64,10 @@ fi
 
 
 
-if grep -Eq -- 'nixos.org/nix/install' ""; then
-
-  # Accept either on the same line (most common) or anywhere in file, but require it if the installer is used
-
-  if grep -Eq -- 'nixos.org/nix/install.*--yes' "" || \
-
-     grep -Eq -- '--yes' ""; then
-
+if grep -Eq -- '''nixos\.org/nix/install''' "$SEED"; then
+  if grep -Eq -- '''--yes([[:space:]]|$)''' "$SEED"; then
     ok "official installer: --yes present (non-interactive)"
-
   else
-
     fail "official installer missing --yes"
-
   fi
-
 fi
-
-  
