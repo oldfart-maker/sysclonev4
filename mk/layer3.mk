@@ -32,11 +32,3 @@ set-hm-user: ## Usage: make set-hm-user HM_USER=mike
 	  echo 'HM_USER = $(HM_USER)' >> Makefile; \
 	  echo "[set-hm-user] HM_USER appended to Makefile"; \
 	fi
-
-.PHONY: validate-layer3
-validate-layer3: ## Validate Layer3 seed content & patterns
-	@bash tools/validate-layer3.sh
-
-.PHONY: validate-layer3
-validate-layer3:
-	@echo "[validate-layer3] disabled"

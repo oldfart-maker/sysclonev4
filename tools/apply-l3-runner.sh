@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+f="seeds/layer3/seed-home.sh"
+d="$(dirname "$f")"
+mkdir -p "$d"
+
+cat >"$f" <<'SEED'
+#!/usr/bin/env bash
+set -Eeuo pipefail
 # Seed Layer 3: Nix (multi-user) + Home Manager on Arch target
 # Adds:
 #   - /usr/local/sbin/sysclone-layer3-home.sh
@@ -147,3 +154,7 @@ fi
 
 # Enable
 chroot "$ROOT_MNT" /bin/bash -c 'systemctl enable sysclone-layer3-home.service' || true
+SEED
+
+chmod +x "$f"
+echo "[apply-l3-runner] wrote $f"
