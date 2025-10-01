@@ -327,3 +327,5 @@ img-expand-rootfs-offline: ## manual expand: requires DEVICE=/dev/sdX
 	echo "[make] offline expand on $$dev"; \
 	sudo env DEVICE="$$dev" bash tools/expand-rootfs-manual.sh
 
+
+-include mk/layer3.mk
