@@ -330,3 +330,4 @@ img-expand-rootfs-offline: ## manual expand: requires DEVICE=/dev/sdX
 
 
 -include mk/layer3.mk
+HM_USER = username
