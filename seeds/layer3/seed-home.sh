@@ -46,7 +46,7 @@ if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs/.git" && -d "$ROOT_MNT/etc/
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -67,7 +67,7 @@ elif [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/.git" ]]; then
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -88,7 +88,7 @@ else
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -167,6 +167,7 @@ if ! id -u "$USERNAME" >/dev/null 2>&1; then log "user $USERNAME missing"; exit 
 # Fill placeholders using the resolved USERNAME (idempotent)
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/flake.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/home.nix" || true
+sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/modules/00-user.nix" || true
 
 chown -R "$USERNAME:$USERNAME" "$HM_DIR"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME"
