@@ -14,29 +14,12 @@ seed-layer3-home: ensure-mounted ## Stage Nix + Home Manager oneshot on target
 
 seed-layer3-vendor-hm: ## Vendor Home Manager (offline-friendly)
 	@set -euo pipefail; \
-	mkdir -p seeds/layer3/vendor; \
-	if [ ! -d seeds/layer3/vendor/home-manager/.git ]; then \
-	  echo "[layer3] cloning home-manager (shallow)"; \
-	  git clone --depth=1 https://github.com/nix-community/home-manager seeds/layer3/vendor/home-manager; \
-	else \
-	  echo "[layer3] updating vendor/home-manager"; \
-	  git -C seeds/layer3/vendor/home-manager fetch --depth=1 origin; \
-	  git -C seeds/layer3/vendor/home-manager reset --hard origin/HEAD; \
-	fi; \
+	git submodule update --init --recursive --depth 1 seeds/layer3/vendor/home-manager; \
 	echo "[layer3] vendor/home-manager @ $$(git -C seeds/layer3/vendor/home-manager rev-parse --short HEAD)"
 
 seed-layer3-vendor-nixpkgs: ## Vendor nixpkgs (offline-friendly)
 	@set -euo pipefail; \
-	mkdir -p seeds/layer3/vendor; \
-	if [ ! -d seeds/layer3/vendor/nixpkgs/.git ]; then \
-	  echo "[layer3] cloning nixpkgs (shallow, nixos-24.05)"; \
-	  git clone --depth=1 --branch nixos-24.05 https://github.com/NixOS/nixpkgs seeds/layer3/vendor/nixpkgs; \
-	else \
-	  echo "[layer3] updating vendor/nixpkgs (nixos-24.05)"; \
-	  git -C seeds/layer3/vendor/nixpkgs fetch --depth=1 origin nixos-24.05; \
-	  git -C seeds/layer3/vendor/nixpkgs checkout -q nixos-24.05; \
-	  git -C seeds/layer3/vendor/nixpkgs reset --hard origin/nixos-24.05; \
-	fi; \
+	git submodule update --init --recursive --depth 1 seeds/layer3/vendor/nixpkgs; \
 	echo "[layer3] vendor/nixpkgs @ $$(git -C seeds/layer3/vendor/nixpkgs rev-parse --short HEAD)"
 
 seed-layer3-all: ensure-mounted ## Aggregate: clear stamp, vendor HM+nixpkgs, seed oneshot, unmount
