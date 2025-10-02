@@ -138,11 +138,31 @@ ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
 
 # ---------------- Always write vendor-aware flake.nix on CARD ----------------
-# If vendor exists on the CARD, point the flake input to it; else fall back to GitHub.
-if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
+if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs" && -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
   cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
-  description = "SysClone Layer3 Home Manager flake (vendored)";
+  description = "SysClone Layer3 flake (vendored nixpkgs + home-manager)";
+  inputs = {
+    nixpkgs.url = "path:./vendor/nixpkgs";
+    home-manager.url = "path:./vendor/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = { self, nixpkgs, home-manager, ... }:
+  let
+    system = "aarch64-linux";
+    username = "USERNAME_PLACEHOLDER";
+    pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+  in {
+    homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs; modules = [ ./home.nix ];
+    };
+  };
+}
+FLK
+elif [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
+  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
+{
+  description = "SysClone Layer3 flake (vendored HM; github nixpkgs)";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     home-manager.url = "path:./vendor/home-manager";
@@ -155,8 +175,7 @@ if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs;
-      modules = [ ./home.nix ];
+      inherit pkgs; modules = [ ./home.nix ];
     };
   };
 }
@@ -164,7 +183,7 @@ FLK
 else
   cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
-  description = "SysClone Layer3 Home Manager flake (github fallback)";
+  description = "SysClone Layer3 flake (github fallback)";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     home-manager.url = "github:nix-community/home-manager/release-24.05";
@@ -177,28 +196,10 @@ else
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs;
-      modules = [ ./home.nix ];
+      inherit pkgs; modules = [ ./home.nix ];
     };
   };
 }
 FLK
 fi
-
-# Ensure username is substituted into flake.nix (on the CARD)
 sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
-
-# Keep a minimal home.nix if missing
-if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
-  cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'HOME'
-{ config, pkgs, ... }:
-{
-  programs.home-manager.enable = true;
-  home.username = "USERNAME_PLACEHOLDER";
-  home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
-  home.stateVersion = "24.05";
-  home.packages = with pkgs; [ git ripgrep ];
-}
-HOME
-  sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/home.nix"
-fi
