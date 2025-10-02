@@ -38,6 +38,8 @@ if [[ -f "$STAMP" ]]; then echo "[layer3] already applied"; exit 0; fi
 ENV_FILE="/etc/sysclone/firstboot.env"
 if [[ -r "$ENV_FILE" ]]; then . "$ENV_FILE"; fi
 : "${USERNAME:=__HM_USER__}"; export USERNAME
+sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\/}/" /etc/sysclone/home/flake.nix || true
+sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\/}/" /etc/sysclone/home/home.nix || true
 log(){ printf '%s %s\n' "[layer3]" "$*"; }
 
 # Ensure curl present (Arch)
@@ -202,4 +204,3 @@ else
 }
 FLK
 fi
-sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
