@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Seed Layer 3: Nix (multi-user) + Home Manager on Arch target (host-side)
-# Adds on the TARGET rootfs:
+# Writes to TARGET rootfs:
 #   - /usr/local/sbin/sysclone-layer3-home.sh
-#   - /etc/systemd/system/sysclone-layer3-home.service (+ enabled via symlink)
-#   - /etc/sysclone/home/{flake.nix,home.nix}
+#   - /etc/systemd/system/sysclone-layer3-home.service (+ enabled)
+#   - /etc/sysclone/home/{flake.nix,home.nix} (if missing)
+#   - /etc/sysclone/home/vendor/home-manager (if vendored on host)
 # Does NOT chroot.
 
 ROOT_MNT="${ROOT_MNT:?ROOT_MNT is required}"
@@ -19,8 +20,14 @@ install -d -m 755 \
   "$ROOT_MNT/etc/nix" \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 
-# ----- On-target runner (oneshot) -----
-cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOSRUN'
+# Copy vendored dependencies if present on HOST
+if [[ -d "seeds/layer3/vendor" ]]; then
+  mkdir -p "$ROOT_MNT/etc/sysclone/home/vendor"
+  cp -a "seeds/layer3/vendor/." "$ROOT_MNT/etc/sysclone/home/vendor/"
+fi
+
+# On-target runner (oneshot)
+cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOS'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export HOME=/root
@@ -39,18 +46,18 @@ if ! command -v curl >/dev/null 2>&1; then
   pacman --noconfirm -Sy curl ca-certificates || true
 fi
 
-# Install Nix (multi-user), fully non-interactive, official installer
+# Install Nix (multi-user)
 if [[ ! -d /nix ]]; then
   log "installing nix (multi-user, daemon)"
   sh <(curl -fsSL https://nixos.org/nix/install) --daemon --yes
 fi
 
-# Make nix CLI available in this shell
+# Make nix CLI available in this shell if profile exists
 if [[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 fi
 
-# Basic nix config
+# Base nix config
 install -d -m 755 /etc/nix
 cat >/etc/nix/nix.conf <<'EONC'
 experimental-features = nix-command flakes
@@ -66,43 +73,51 @@ if [[ ! -f "$HM_DIR/flake.nix" ]]; then log "HM flake missing at $HM_DIR; aborti
 if ! id -u "$USERNAME" >/dev/null 2>&1; then log "user $USERNAME missing"; exit 1; fi
 chown -R "$USERNAME:$USERNAME" "$HM_DIR"
 
-# Ensure user XDG dirs exist (for nix run cache etc.)
+# Ensure user dirs
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.cache"
-install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.cache/nix"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/state"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
 
-# Run Home-Manager via nix run (pinned rev; longer connect timeout)
+# Prefer vendored Home Manager if present (avoids GitHub on first boot)
+if [[ -d "$HM_DIR/vendor/home-manager" ]]; then
+  HM_SRC="$HM_DIR/vendor/home-manager"
+else
+  HM_SRC="github:nix-community/home-manager?rev=004753ae6b04c4b18aa07192c1106800aaacf6c3"
+fi
+
 export NIX_CONFIG="experimental-features = nix-command flakes"
 USER_PATH="/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin"
-HM_SRC="github:nix-community/home-manager?rev=004753ae6b04c4b18aa07192c1106800aaacf6c3"
 
-log "home-manager switch for $USERNAME via nix run (pinned)"
-sudo -u "$USERNAME" env -i \
-  HOME="/home/$USERNAME" \
-  USER="$USERNAME" \
-  LOGNAME="$USERNAME" \
-  PATH="$USER_PATH" \
-  XDG_CACHE_HOME="/home/$USERNAME/.cache" \
-  XDG_CONFIG_HOME="/home/$USERNAME/.config" \
-  XDG_STATE_HOME="/home/$USERNAME/.local/state" \
-  NIX_CONFIG="$NIX_CONFIG" \
-  nix --option connect-timeout 60 --option http-connections 1 \
-  run "${HM_SRC}#home-manager" -- \
-    switch --flake "$HM_DIR#${USERNAME}"
+run_hm_switch() {
+  sudo -u "$USERNAME" \
+    env -i HOME="/home/$USERNAME" USER="$USERNAME" LOGNAME="$USERNAME" PATH="$USER_PATH" \
+    XDG_CACHE_HOME="/home/$USERNAME/.cache" \
+    XDG_CONFIG_HOME="/home/$USERNAME/.config" \
+    XDG_STATE_HOME="/home/$USERNAME/.local/state" \
+    nix --option connect-timeout 120 --option http-connections 1 \
+        run "$HM_SRC"#home-manager -- switch --flake "$HM_DIR#$USERNAME"
+}
 
-touch "$STAMP"; log "done"
-EOSRUN
+attempts=5
+for i in $(seq 1 "$attempts"); do
+  log "home-manager switch (attempt $i/$attempts)"
+  if run_hm_switch; then
+    touch "$STAMP"; log "done"; exit 0
+  fi
+  sleep $(( i*i ))
+done
+
+log "home-manager failed after $attempts attempts"
+exit 1
+EOS
 
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
-
-# Bake the HM user into the on-target runner
 sed -i "s/__HM_USER__/${HM_USER//\//\/}/" "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 
-# ----- systemd unit on target (enabled by symlink; no chroot) -----
-cat > "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'EOUNIT'
+# systemd unit
+cat > "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'UNIT'
 [Unit]
 Description=SysClone Layer3: Install Nix + Home Manager and apply home config
 After=network-online.target
@@ -116,44 +131,48 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-EOUNIT
+UNIT
 
-# Enable by creating the wants/ symlink on the target rootfs
 ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
 
-# ----- Minimal HM flake (pinned) if missing -----
+# Minimal HM flake if missing
 if [[ ! -f "$ROOT_MNT/etc/sysclone/home/flake.nix" ]]; then
-  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'EOFLAKE'
+  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
-  description = "sysclone HM seed";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-  # Pin HM to avoid GitHub HEAD lookups on first boot
-  inputs.home-manager.url = "github:nix-community/home-manager?rev=004753ae6b04c4b18aa07192c1106800aaacf6c3";
-  inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
-
+  description = "SysClone Layer3 Home Manager flake";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    home-manager.url = "github:nix-community/home-manager/release-24.05";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
   outputs = { self, nixpkgs, home-manager, ... }:
-    let mk = user: system:
-      home-manager.lib.homeManagerConfiguration {
-        pkgs = import nixpkgs { inherit system; };
-        modules = [ ./home.nix { home.username = user; home.homeDirectory = "/home/${user}"; } ];
-      };
-    in {
-      homeConfigurations = {
-        username-aarch64 = mk "username" "aarch64-linux";
-      };
+  let
+    system = "aarch64-linux";
+    username = "USERNAME_PLACEHOLDER";
+    pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+  in {
+    homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs;
+      modules = [ ./home.nix ];
     };
+  };
 }
-EOFLAKE
+FLK
+  sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
 fi
 
 if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
-  cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'EOHOME'
+  cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'HOME'
 { config, pkgs, ... }:
 {
   programs.home-manager.enable = true;
+  home.username = "USERNAME_PLACEHOLDER";
+  home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
   home.stateVersion = "24.05";
+  # Start small; we’ll layer Emacs/Niri next
   home.packages = with pkgs; [ git ripgrep ];
 }
-EOHOME
+HOME
+  sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/home.nix"
 fi
