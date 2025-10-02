@@ -1,4 +1,4 @@
-.PHONY: clear-layer3-stamps seed-layer3-home seed-layer3-vendor-hm seed-layer3-all set-hm-user
+.PHONY: clear-layer3-stamps seed-layer3-home seed-layer3-vendor-hm seed-layer3-vendor-nixpkgs seed-layer3-all set-hm-user
 
 # Stable user for Home Manager on the target (override per-call: HM_USER=mike make …)
 HM_USER ?= username-aarch64
@@ -12,7 +12,7 @@ seed-layer3-home: ensure-mounted ## Stage Nix + Home Manager oneshot on target
 	@echo "[layer3] seeding nix + home-manager oneshot"
 	sudo env ROOT_MNT="$(ROOT_MNT)" USERNAME="$(HM_USER)" HM_USER="$(HM_USER)" bash seeds/layer3/seed-home.sh
 
-seed-layer3-vendor-hm: ## (Optional) vendor Home Manager so first boot can be offline-friendly
+seed-layer3-vendor-hm: ## Vendor Home Manager (offline-friendly)
 	@set -euo pipefail; \
 	mkdir -p seeds/layer3/vendor; \
 	if [ ! -d seeds/layer3/vendor/home-manager/.git ]; then \
@@ -25,9 +25,24 @@ seed-layer3-vendor-hm: ## (Optional) vendor Home Manager so first boot can be of
 	fi; \
 	echo "[layer3] vendor/home-manager @ $$(git -C seeds/layer3/vendor/home-manager rev-parse --short HEAD)"
 
-seed-layer3-all: ensure-mounted ## Aggregate: clear stamp, vendor HM, seed oneshot, unmount
+seed-layer3-vendor-nixpkgs: ## Vendor nixpkgs (offline-friendly)
+	@set -euo pipefail; \
+	mkdir -p seeds/layer3/vendor; \
+	if [ ! -d seeds/layer3/vendor/nixpkgs/.git ]; then \
+	  echo "[layer3] cloning nixpkgs (shallow, nixos-24.05)"; \
+	  git clone --depth=1 --branch nixos-24.05 https://github.com/NixOS/nixpkgs seeds/layer3/vendor/nixpkgs; \
+	else \
+	  echo "[layer3] updating vendor/nixpkgs (nixos-24.05)"; \
+	  git -C seeds/layer3/vendor/nixpkgs fetch --depth=1 origin nixos-24.05; \
+	  git -C seeds/layer3/vendor/nixpkgs checkout -q nixos-24.05; \
+	  git -C seeds/layer3/vendor/nixpkgs reset --hard origin/nixos-24.05; \
+	fi; \
+	echo "[layer3] vendor/nixpkgs @ $$(git -C seeds/layer3/vendor/nixpkgs rev-parse --short HEAD)"
+
+seed-layer3-all: ensure-mounted ## Aggregate: clear stamp, vendor HM+nixpkgs, seed oneshot, unmount
 	@set -euo pipefail; \
 	  $(MAKE) clear-layer3-stamps; \
+	  $(MAKE) seed-layer3-vendor-nixpkgs; \
 	  $(MAKE) seed-layer3-vendor-hm; \
 	  $(MAKE) seed-layer3-home; \
 	  $(MAKE) ensure-unmounted; \
