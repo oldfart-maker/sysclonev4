@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Writes to TARGET rootfs:
 #   - /usr/local/sbin/sysclone-layer3-home.sh
 #   - /etc/systemd/system/sysclone-layer3-home.service (+ enabled)
-#   - /etc/sysclone/home/{flake.nix,home.nix} (if missing)
+#   - /etc/sysclone/home/{flake.nix,home.nix} (home.nix if missing)
 #   - /etc/sysclone/home/vendor/home-manager (if vendored on host)
 # Does NOT chroot.
 
@@ -20,13 +20,13 @@ install -d -m 755 \
   "$ROOT_MNT/etc/nix" \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 
-# Copy vendored dependencies if present on HOST
+# Copy vendored dependencies if present on HOST into the CARD
 if [[ -d "seeds/layer3/vendor" ]]; then
   mkdir -p "$ROOT_MNT/etc/sysclone/home/vendor"
   cp -a "seeds/layer3/vendor/." "$ROOT_MNT/etc/sysclone/home/vendor/"
 fi
 
-# On-target runner (oneshot)
+# ---------------- On-target runner (oneshot) ----------------
 cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOS'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -37,7 +37,7 @@ if [[ -f "$STAMP" ]]; then echo "[layer3] already applied"; exit 0; fi
 
 ENV_FILE="/etc/sysclone/firstboot.env"
 if [[ -r "$ENV_FILE" ]]; then . "$ENV_FILE"; fi
-: "${USERNAME:=${USERNAME}}"; export USERNAME
+: "${USERNAME:=__HM_USER__}"; export USERNAME
 log(){ printf '%s %s\n' "[layer3]" "$*"; }
 
 # Ensure curl present (Arch)
@@ -57,14 +57,14 @@ if [[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 fi
 
-# Base nix config
+# Base nix config (+ trust the HM user to avoid restricted-setting warnings)
 install -d -m 755 /etc/nix
-cat >/etc/nix/nix.conf <<'EONC'
+cat >/etc/nix/nix.conf <<EONC
 experimental-features = nix-command flakes
 auto-optimise-store = true
 max-jobs = auto
-EONC
 trusted-users = root ${USERNAME}
+EONC
 
 systemctl daemon-reload || true
 systemctl enable --now nix-daemon.service || true
@@ -115,9 +115,9 @@ exit 1
 EOS
 
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
-sed -i "s/${USERNAME}/${HM_USER//\//\/}/" "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
+sed -i "s/__HM_USER__/${HM_USER//\//\/}/" "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 
-# systemd unit
+# ---------------- systemd unit on target ----------------
 cat > "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'UNIT'
 [Unit]
 Description=SysClone Layer3: Install Nix + Home Manager and apply home config
@@ -137,11 +137,10 @@ UNIT
 ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
 
-# Minimal HM flake if missing
-# ----- Write HM flake unconditionally (vendor-aware) -----
-rm -f "$ROOT_MNT/etc/sysclone/home/flake.nix"
+# ---------------- Always write vendor-aware flake.nix on CARD ----------------
+# If vendor exists on the CARD, point the flake input to it; else fall back to GitHub.
 if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
-  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<FLK
+  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
   description = "SysClone Layer3 Home Manager flake (vendored)";
   inputs = {
@@ -156,38 +155,16 @@ if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./home.nix ];
+      inherit pkgs;
+      modules = [ ./home.nix ];
     };
   };
 }
 FLK
 else
-  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<FLK
-{
-  description = "SysClone Layer3 Home Manager flake (github fallback)";
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-    home-manager.url = "github:nix-community/home-manager/release-24.05";
-    home-manager.inputs.nixpkgs.follows = "nixpkgs";
-  };
-  outputs = { self, nixpkgs, home-manager, ... }:
-  let
-    system = "aarch64-linux";
-    username = "USERNAME_PLACEHOLDER";
-    pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
-  in {
-    homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./home.nix ];
-    };
-  };
-}
-FLK
-fi
-sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
-if [[ ! -f "$ROOT_MNT/etc/sysclone/home/flake.nix" ]]; then
   cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
-  description = "SysClone Layer3 Home Manager flake";
+  description = "SysClone Layer3 Home Manager flake (github fallback)";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     home-manager.url = "github:nix-community/home-manager/release-24.05";
@@ -206,9 +183,12 @@ if [[ ! -f "$ROOT_MNT/etc/sysclone/home/flake.nix" ]]; then
   };
 }
 FLK
-  sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
 fi
 
+# Ensure username is substituted into flake.nix (on the CARD)
+sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
+
+# Keep a minimal home.nix if missing
 if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
   cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'HOME'
 { config, pkgs, ... }:
@@ -217,7 +197,6 @@ if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
   home.username = "USERNAME_PLACEHOLDER";
   home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
   home.stateVersion = "24.05";
-  # Start small; we’ll layer Emacs/Niri next
   home.packages = with pkgs; [ git ripgrep ];
 }
 HOME
