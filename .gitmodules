@@ -2,3 +2,7 @@
 	path = seeds/layer3/vendor/home-manager
 	url = https://github.com/nix-community/home-manager
 	branch = release-24.05
+[submodule "seeds/layer3/vendor/nixpkgs"]
+	path = seeds/layer3/vendor/nixpkgs
+	url = https://github.com/NixOS/nixpkgs
+	branch = nixos-24.05
