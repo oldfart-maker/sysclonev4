@@ -25,11 +25,12 @@ seed-layer3-vendor-hm: ## (Optional) vendor Home Manager so first boot can be of
 	fi; \
 	echo "[layer3] vendor/home-manager @ $$(git -C seeds/layer3/vendor/home-manager rev-parse --short HEAD)"
 
-seed-layer3-all: ## Aggregate: clear stamp, (optionally) vendor HM, seed oneshot
+seed-layer3-all: ensure-mounted ## Aggregate: clear stamp, vendor HM, seed oneshot, unmount
 	@set -euo pipefail; \
 	  $(MAKE) clear-layer3-stamps; \
 	  $(MAKE) seed-layer3-vendor-hm; \
 	  $(MAKE) seed-layer3-home; \
+	  $(MAKE) ensure-unmounted; \
 	  echo "[layer3] aggregate done"
 
 # Persist a new HM user into the root Makefile (stable-var pattern).
