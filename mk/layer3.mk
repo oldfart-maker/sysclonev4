@@ -1,7 +1,7 @@
-.PHONY: clear-layer3-stamps seed-layer3-home seed-layer3-all set-hm-user
+.PHONY: clear-layer3-stamps seed-layer3-home seed-layer3-vendor-hm seed-layer3-all set-hm-user
 
 # Stable user for Home Manager on the target (override per-call: HM_USER=mike make …)
-HM_USER ?= username
+HM_USER ?= username-aarch64
 
 ## Layer 3 (Home Manager on Arch target)
 clear-layer3-stamps: ensure-mounted ## Clear L3 stamp on target rootfs
@@ -10,13 +10,26 @@ clear-layer3-stamps: ensure-mounted ## Clear L3 stamp on target rootfs
 
 seed-layer3-home: ensure-mounted ## Stage Nix + Home Manager oneshot on target
 	@echo "[layer3] seeding nix + home-manager oneshot"
-	sudo env ROOT_MNT="$(ROOT_MNT)" USERNAME="$(HM_USER)" bash seeds/layer3/seed-home.sh
+	sudo env ROOT_MNT="$(ROOT_MNT)" USERNAME="$(HM_USER)" HM_USER="$(HM_USER)" bash seeds/layer3/seed-home.sh
 
-seed-layer3-all: ensure-mounted ## Stage HM and unmount
+seed-layer3-vendor-hm: ## (Optional) vendor Home Manager so first boot can be offline-friendly
+	@set -euo pipefail; \
+	mkdir -p seeds/layer3/vendor; \
+	if [ ! -d seeds/layer3/vendor/home-manager/.git ]; then \
+	  echo "[layer3] cloning home-manager (shallow)"; \
+	  git clone --depth=1 https://github.com/nix-community/home-manager seeds/layer3/vendor/home-manager; \
+	else \
+	  echo "[layer3] updating vendor/home-manager"; \
+	  git -C seeds/layer3/vendor/home-manager fetch --depth=1 origin; \
+	  git -C seeds/layer3/vendor/home-manager reset --hard origin/HEAD; \
+	fi; \
+	echo "[layer3] vendor/home-manager @ $$(git -C seeds/layer3/vendor/home-manager rev-parse --short HEAD)"
+
+seed-layer3-all: ## Aggregate: clear stamp, (optionally) vendor HM, seed oneshot
 	@set -euo pipefail; \
 	  $(MAKE) clear-layer3-stamps; \
+	  $(MAKE) seed-layer3-vendor-hm; \
 	  $(MAKE) seed-layer3-home; \
-	  $(MAKE) ensure-unmounted; \
 	  echo "[layer3] aggregate done"
 
 # Persist a new HM user into the root Makefile (stable-var pattern).
