@@ -4,12 +4,12 @@ set -Eeuo pipefail
 # Writes onto TARGET rootfs:
 #   - /usr/local/sbin/sysclone-layer3-home.sh  (runtime-smart, auto-username)
 #   - /etc/systemd/system/sysclone-layer3-home.service
-#   - /etc/sysclone/home/{flake.nix,home.nix} (flake is vendor-aware; username filled at boot)
-#   - /etc/sysclone/home/vendor/{home-manager,nixpkgs} if present in seeds
+#   - /etc/sysclone/home/{flake.nix,home.nix,modules/00-user.nix}
+#   - /etc/sysclone/home/vendor/{home-manager,nixpkgs} (copied from repo if present)
 # Does NOT chroot.
 
 ROOT_MNT="${ROOT_MNT:?ROOT_MNT is required}"
-USERNAME="${USERNAME:-username}"   # default if firstboot.env is not used (only as a seed default)
+USERNAME="${USERNAME:-username}"
 HM_USER="${HM_USER:-$USERNAME}"
 
 install -d -m 755 \
@@ -17,11 +17,12 @@ install -d -m 755 \
   "$ROOT_MNT/etc/systemd/system" \
   "$ROOT_MNT/etc/sysclone/home" \
   "$ROOT_MNT/etc/sysclone/home/vendor" \
+  "$ROOT_MNT/etc/sysclone/home/modules" \
   "$ROOT_MNT/var/lib/sysclone" \
   "$ROOT_MNT/etc/nix" \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 
-# ---------- copy vendored repos from HOST to CARD (if present) ----------
+# ---------- copy vendored submodules from HOST to CARD (if present) ----------
 if [[ -d "seeds/layer3/vendor/home-manager" ]]; then
   rsync -a --delete "seeds/layer3/vendor/home-manager/" "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/"
 fi
@@ -109,7 +110,15 @@ if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
 HOME
 fi
 
-# ---------- on-target runner (auto-detect username, fill placeholders at boot) ----------
+# guard module: ALWAYS write, idempotent overwrite
+cat > "$ROOT_MNT/etc/sysclone/home/modules/00-user.nix" <<'USR'
+{ config, pkgs, ... }: {
+  home.username = "USERNAME_PLACEHOLDER";
+  home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
+}
+USR
+
+# ---------- on-target runner (auto-username; 3 sed substitutions; retries) ----------
 cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOS'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -123,7 +132,7 @@ ENV_FILE="/etc/sysclone/firstboot.env"
 [[ -r "$ENV_FILE" ]] && . "$ENV_FILE"
 
 # Resolve USERNAME:
-# 1) from env if provided; 2) first uid>=1000 user; 3) fallback "username"
+# 1) env; 2) first uid>=1000; 3) "username"
 if [[ -z "${USERNAME:-}" ]]; then
   USERNAME="$(awk -F: '$3>=1000 && $1!="nobody"{print $1; exit}' /etc/passwd || true)"
   USERNAME="${USERNAME:-username}"
@@ -164,7 +173,7 @@ HM_DIR="/etc/sysclone/home"
 if [[ ! -f "$HM_DIR/flake.nix" ]]; then log "HM flake missing at $HM_DIR"; exit 1; fi
 if ! id -u "$USERNAME" >/dev/null 2>&1; then log "user $USERNAME missing"; exit 1; fi
 
-# Fill placeholders using the resolved USERNAME (idempotent)
+# Substitute USERNAME_PLACEHOLDER in all seeded files (idempotent)
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/flake.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/home.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/modules/00-user.nix" || true
