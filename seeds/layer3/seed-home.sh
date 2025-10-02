@@ -37,7 +37,7 @@ if [[ -f "$STAMP" ]]; then echo "[layer3] already applied"; exit 0; fi
 
 ENV_FILE="/etc/sysclone/firstboot.env"
 if [[ -r "$ENV_FILE" ]]; then . "$ENV_FILE"; fi
-: "${USERNAME:=__HM_USER__}"; export USERNAME
+: "${USERNAME:=${USERNAME}}"; export USERNAME
 log(){ printf '%s %s\n' "[layer3]" "$*"; }
 
 # Ensure curl present (Arch)
@@ -64,6 +64,7 @@ experimental-features = nix-command flakes
 auto-optimise-store = true
 max-jobs = auto
 EONC
+trusted-users = root ${USERNAME}
 
 systemctl daemon-reload || true
 systemctl enable --now nix-daemon.service || true
@@ -114,7 +115,7 @@ exit 1
 EOS
 
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
-sed -i "s/__HM_USER__/${HM_USER//\//\/}/" "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
+sed -i "s/${USERNAME}/${HM_USER//\//\/}/" "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 
 # systemd unit
 cat > "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'UNIT'
@@ -137,6 +138,52 @@ ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
 
 # Minimal HM flake if missing
+# ----- Write HM flake unconditionally (vendor-aware) -----
+rm -f "$ROOT_MNT/etc/sysclone/home/flake.nix"
+if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager" ]]; then
+  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<FLK
+{
+  description = "SysClone Layer3 Home Manager flake (vendored)";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    home-manager.url = "path:./vendor/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = { self, nixpkgs, home-manager, ... }:
+  let
+    system = "aarch64-linux";
+    username = "USERNAME_PLACEHOLDER";
+    pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+  in {
+    homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs; modules = [ ./home.nix ];
+    };
+  };
+}
+FLK
+else
+  cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<FLK
+{
+  description = "SysClone Layer3 Home Manager flake (github fallback)";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    home-manager.url = "github:nix-community/home-manager/release-24.05";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = { self, nixpkgs, home-manager, ... }:
+  let
+    system = "aarch64-linux";
+    username = "USERNAME_PLACEHOLDER";
+    pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+  in {
+    homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs; modules = [ ./home.nix ];
+    };
+  };
+}
+FLK
+fi
+sed -i "s/USERNAME_PLACEHOLDER/${HM_USER//\//\/}/" "$ROOT_MNT/etc/sysclone/home/flake.nix"
 if [[ ! -f "$ROOT_MNT/etc/sysclone/home/flake.nix" ]]; then
   cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
