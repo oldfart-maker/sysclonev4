@@ -1,0 +1,4 @@
+[submodule "seeds/layer3/vendor/home-manager"]
+	path = seeds/layer3/vendor/home-manager
+	url = https://github.com/nix-community/home-manager
+	branch = release-24.05
