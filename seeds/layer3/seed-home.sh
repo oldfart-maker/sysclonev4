@@ -282,7 +282,6 @@ w
 q
 ED
 fi
-## sysclone: ensure ~/.local exists & owned before ~/.local/bin
 # ----- sysclone: ensure ~/.config exists & owned before emacs-prod tangle -----
 # Patch the runner ON THE CARD (after it’s written) to self-heal ~/.config.
 if ! grep -q '/home/\$USERNAME/.config/emacs-prod' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
@@ -316,4 +315,3 @@ w
 q
 ED
 fi
-## sysclone: config self-heal
