@@ -182,6 +182,10 @@ chown -R "$USERNAME:$USERNAME" "$HM_DIR"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.cache" "/home/$USERNAME/.config" "/home/$USERNAME/.local/state"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/bin"
+# safety: if anything under ~/.local got root-owned earlier, fix it
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.local" || true
 
 # Prefer vendored Home Manager if present
 if [[ -d "$HM_DIR/vendor/home-manager/.git" ]]; then
