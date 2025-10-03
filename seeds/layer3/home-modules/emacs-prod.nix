@@ -59,9 +59,5 @@ in {
     '';
 
   # optional niceties
-  programs.emacs = {
-    enable = true;
-    package = emacsPkg;
-  };
   services.emacs.enable = false; # we use emacs-prod instead
 }
