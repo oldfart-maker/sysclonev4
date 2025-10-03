@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Emacs (Dev Profile)
+Comment=Launch Emacs (dev config)
+Exec=emacsclient -c -n --alternate-editor="" --socket-name=emacs-dev
+Icon=emacs
+Type=Application
+Categories=Development;TextEditor;
+StartupNotify=false

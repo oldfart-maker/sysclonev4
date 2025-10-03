@@ -47,7 +47,7 @@ if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs/.git" && -d "$ROOT_MNT/etc/
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
     };
   };
 }
@@ -68,7 +68,7 @@ elif [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/.git" ]]; then
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
     };
   };
 }
@@ -89,7 +89,7 @@ else
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
     };
   };
 }
@@ -252,4 +252,14 @@ if ! grep -qs 'nix-daemon.sh' "$ROOT_MNT/etc/zsh/zprofile" 2>/dev/null; then
     echo '# Source Nix daemon env on login (added by sysclone Layer3)'
     echo '[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
   } >> "$ROOT_MNT/etc/zsh/zprofile"
+fi
+# ----- HM modules from repo -> CARD -----
+if [[ -d "seeds/layer3/home-modules" ]]; then
+  install -d -m 755 "$ROOT_MNT/etc/sysclone/home/modules"
+  rsync -a "seeds/layer3/home-modules/" "$ROOT_MNT/etc/sysclone/home/modules/"
+fi
+# ----- Optional dotfiles from repo -> CARD -----
+if [[ -d "seeds/layer3/dotfiles" ]]; then
+  install -d -m 755 "$ROOT_MNT/etc/sysclone/home/dotfiles"
+  rsync -a "seeds/layer3/dotfiles/" "$ROOT_MNT/etc/sysclone/home/dotfiles/"
 fi

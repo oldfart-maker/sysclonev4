@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Emacs (Prod Profile)
+Comment=Launch Emacs (prod config)
+Exec=emacsclient -c -n --alternate-editor="" --socket-name=emacs-prod
+Icon=emacs
+Type=Application
+Categories=Development;TextEditor;
+StartupNotify=false

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Usage: emacs-profile emacs-prod | emacs-dev
+
+CONFIG="$1"
+CONFIG_DIR="$HOME/.config/$CONFIG"
+
+if [ -d "$CONFIG_DIR" ]; then
+  exec emacs --daemon="$CONFIG" --init-directory="$CONFIG_DIR"
+else
+  echo "Emacs config '$CONFIG' not found in ~/.config"
+  exit 1
+fi

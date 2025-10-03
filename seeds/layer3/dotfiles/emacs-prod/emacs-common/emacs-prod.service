@@ -1,0 +1,12 @@
+[Unit]
+Description=Emacs daemon (prod config)
+Documentation=info:emacs man:emacs(1) https://gnu.org/software/emacs/
+
+[Service]
+Type=forking
+ExecStart=%h/.local/bin/emacs-profile emacs-prod
+ExecStop=/usr/bin/emacsclient --eval "(kill-emacs)"
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

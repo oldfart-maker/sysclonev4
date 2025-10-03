@@ -1,0 +1,1438 @@
+* Emacs Literate Config
+** Notes
+This is my second attempt at usin a literate config. The first
+was with niri so that I could see if this approach gave me
+additional flexibility due to limitations in config.kdl. It
+is overkill for niri. Now I am trying it for emacs and I think
+it is a better use, mostly for the documentation. This is also a
+great way to learn about emacs modules etc. This config has
+been curated from a number of literate configs on github.com
+
+After executing tangle, copy the output files to the target
+directory and if adding a new section make sure to update the
+init.el code block:
+
+cp -r ./modules/* ~/.config/[target-env]/modules/
+cp -r init.el early-config.el ~/.config/[target-env]/
+
+Example
+
+cp -r ~/projects/emacs_babel_config/modules/* ~/.config/emacs-prod/modules/
+cp -r ~/projects/emacs_babel_config *.el ~/.config/emacs-prod/
+
+Emacs Function: emacs-babel-build-and-deploy
+   
+* Environment
+
+Defines external environment variables and configurations used across modules.
+Manually modify the `active-env` block below to switch between prod/dev environments.
+
+Options emacs-prod | emacs-dev
+#+NAME: target-env
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "emacs-prod")
+#+END_SRC
+
+#+RESULTS: target-env
+: "emacs-prod"
+
+Set target os.
+
+Options archlinux | windows
+#+NAME: target-os
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "archlinux")  
+#+END_SRC
+
+#+RESULTS: target-os
+: "archlinux"
+
+Variable definitions for those variables that can shared across all
+modules and enviroments. These should be used judiciously.
+All other variable definitions should be within their respective code blocks.
+#+NAME: emacs-common-dir
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "~/.config/emacs-common")
+#+END_SRC
+
+#+RESULTS: emacs-common-dir
+: "~/.config/emacs-common"
+
+Set evnrionment variables.
+#+BEGIN_SRC emacs-lisp :noweb yes  :tangle ./modules/env.el
+  (setq my/env <<target-env()>>)
+  (setq server-name <<target-env()>>) 
+#+END_SRC
+
+#+RESULTS:
+: emacs-prod
+
+Load my API keys.
+#+BEGIN_SRC emacs-lisp :noweb yes  :tangle ./modules/env.el
+  (load-file (concat <<emacs-common-dir()>> "/api-keys.el"))
+#+END_SRC
+
+#+RESULTS:
+: t
+
+Starts emacs in server mode.
+#+BEGIN_SRC emacs-lisp  :eval never :tangle ./modules/env.el
+  (require 'server)
+  (unless (server-running-p)
+     (server-start))
+#+END_SRC
+
+Turn off yes/no prompt for evaluating org buffer.
+#+BEGIN_SRC emacs-lisp  :eval never :tangle ./modules/env.el
+  ;; Turn of eval protection
+  (setq org-confirm-babel-evaluate nil)
+#+END_SRC
+
+Emacs Custom File
+#+BEGIN_SRC emacs-lisp :tangle ./modules/env.el
+  (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+  (load custom-file 'noerror)
+#+END_SRC
+
+#+RESULTS:
+: t
+
+* Init.el and Early-Init.el configurations.
+This is my first literate config. I used seperate .el files based on
+category. I will probably consolidate them back into init.el
+and earl-init.el. I'm have not seen any benefit to using mulitple
+files and have run across a few issues in that if I want to
+eval-buffer one of these there may be dependencies that have not
+been loaded. As of 8/18/2025 I am an emacs noobie.
+#+BEGIN_SRC emacs-lisp :eval never :tangle init.el
+  (setq user-emacs-directory
+        (or (file-name-directory (or load-file-name buffer-file-name))
+            default-directory))
+
+  (load (expand-file-name "modules/env.el" user-emacs-directory))
+  (load (expand-file-name "modules/core.el" user-emacs-directory))
+  (load (expand-file-name "modules/core-extensions.el" user-emacs-directory))
+  (load (expand-file-name "modules/ui.el" user-emacs-directory))
+  (load (expand-file-name "modules/org.el" user-emacs-directory))
+  (load (expand-file-name "modules/dev.el" user-emacs-directory))
+  (load (expand-file-name "modules/ai.el" user-emacs-directory))
+  (load (expand-file-name "modules/system-os.el" user-emacs-directory))
+  (load (expand-file-name "modules/email.el" user-emacs-directory))
+  (load (expand-file-name "modules/editing-text.el" user-emacs-directory))  
+  (load (expand-file-name "modules/my-functions.el" user-emacs-directory))
+  (load (expand-file-name "modules/remote.el" user-emacs-directory))
+  #+END_SRC
+
+  Early-Init.el
+#+BEGIN_SRC emacs-lisp :eval never :tangle early-init.el
+  ;; Disable package.el; let straight.el handle packages.
+  (setq package-enable-at-startup nil
+        package-quickstart nil)
+#+END_SRC
+
+* Core
+
+Core emacs configurtation. These settings should be the same across any of my
+environments (e.g. laptop, desktop, pi).
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/core.el
+
+  ;; Start quiet
+  (setq inhibit-startup-screen t
+        inhibit-startup-message t
+        ring-bell-function #'ignore)
+
+  ;; Files/backups
+  (setq make-backup-files nil
+        auto-save-default nil
+        load-prefer-newer t)
+
+  ;; UTF-8 everywhere
+  (prefer-coding-system 'utf-8)
+  (set-default-coding-systems 'utf-8)
+  (set-terminal-coding-system 'utf-8)
+  (set-keyboard-coding-system 'utf-8)
+
+  ;; Make ESC quit prompts
+  (global-set-key (kbd "<escape>") #'keyboard-escape-quit)
+
+  ;; Don’t let package.el auto-enable itself (we use straight.el)
+  (setq package-enable-at-startup nil)
+
+  ;; straight.el bootstrap + use-package integration
+  (defvar bootstrap-version)
+  (let* ((user-dir user-emacs-directory)
+         (bootstrap-file
+          (expand-file-name "straight/repos/straight.el/bootstrap.el" user-dir)))
+    (unless (file-exists-p bootstrap-file)
+      (with-current-buffer
+          (url-retrieve-synchronously
+           "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+           'silent 'inhibit-cookies)
+        (goto-char (point-max))
+        (eval-print-last-sexp)))
+    (load bootstrap-file nil 'nomessage))
+
+  ;; Install use-package via straight and make it the default installer
+  (straight-use-package 'use-package)
+  (setq straight-use-package-by-default t)
+  (require 'use-package)
+
+  ;; Housekeeping
+  (use-package no-littering
+    :config
+    (setq auto-save-file-name-transforms
+          `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
+
+  ;; Optional: Weekly straight update + lock versions at 09:00
+  (add-hook 'emacs-startup-hook
+            (lambda ()
+              (run-at-time "09:00" (* 7 24 60 60)
+                           (lambda ()
+                             (message "Straight: pulling all & freezing versions…")
+                             (straight-pull-all)
+                             (straight-freeze-versions)
+                             (message "Straight: done.")))))
+
+  ;; Ensure environment variables inside Emacs look the same as in the shell.
+  (use-package exec-path-from-shell
+    :init)
+  (when (memq window-system '(mac ns x))
+    (exec-path-from-shell-initialize))
+  (when (daemonp)
+    (exec-path-from-shell-initialize))
+
+  (provide 'core)
+#+END_SRC
+
+* Core-Extensions
+
+Core extenstions emacs configuration. Ideally these will be the same across all environments.
+This section also inlcudes the leader key setup, which for some functions I feel is very helpful.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/core-extensions.el
+      ;; Enable which-key for keybinding discovery
+      (use-package which-key
+        :defer 0
+        :diminish
+        :config
+        (which-key-mode))
+
+      ;; Completion and search system
+      (use-package ivy
+        :diminish
+        :bind (("C-s" . swiper)
+               :map ivy-minibuffer-map
+               ("TAB" . ivy-alt-done)
+               ("C-l" . ivy-alt-done)
+               ("C-j" . ivy-next-line)
+               ("C-k" . ivy-previous-line)
+               :map ivy-switch-buffer-map
+               ("C-k" . ivy-previous-line)
+               ("C-l" . ivy-done)
+               ("C-d" . ivy-switch-buffer-kill)
+               :map ivy-reverse-i-search-map
+               ("C-k" . ivy-previous-line)
+               ("C-d" . ivy-reverse-i-search-kill))
+        :config
+        (ivy-mode 1))
+
+      (use-package counsel
+        :bind (("C-M-j" . counsel-switch-buffer)
+               :map minibuffer-local-map
+               ("C-r" . counsel-minibuffer-history))
+        :custom
+        (counsel-linux-app-format-function #'counsel-linux-app-format-function-name-only)
+        :config
+        (counsel-mode 1))
+
+      (use-package ivy-rich
+        :after counsel
+        :init
+        (ivy-rich-mode 1))
+
+      ;; Use to prioritize command history based on usage.
+      (use-package ivy-prescient
+      :after counsel
+      :custom
+      (ivy-prescient-enable-filtering nil)
+      :config
+      ;; Uncomment the following line to have sorting remembered across sessions!
+      ;: (prescient-persist-mode 1)
+      (ivy-prescient-mode 1))
+
+      (use-package helpful
+        :custom
+        (counsel-describe-function-function #'helpful-callable)
+        (counsel-describe-variable-function #'helpful-variable)
+        :bind
+        ([remap describe-function] . counsel-describe-function)
+        ([remap describe-command] . helpful-command)
+        ([remap describe-variable] . counsel-describe-variable)
+        ([remap describe-key] . helpful-key))
+
+      ;; Set up leader keys.
+      (use-package general
+        :demand t
+        :config
+        (general-define-key
+         :keymaps 'global
+         :prefix-map 'my/leader-map
+         :prefix "M-m")
+
+        (general-create-definer my/leader
+          :keymaps 'my/leader-map)
+
+        (global-set-key (kbd "M-i") #'back-to-indentation))
+
+      ;; Define a macro that builds sub-menus off M-m using `my/leader`
+      (defmacro +general-global-menu! (name prefix-key &rest body)
+        "Create a definer named my/global-NAME wrapping `my/leader`.
+      Create prefix map: my/global-NAME-map. Bind BODY under M-m PREFIX-KEY."
+        (declare (indent 2))
+        (let* ((sym (intern (format "my/global-%s" name)))
+               (prefix-map (intern (format "my/global-%s-map" name))))
+          `(progn
+             (general-create-definer ,sym
+               :wrapping my/leader
+               :prefix-map ',prefix-map
+               :prefix ,prefix-key
+               :wk-full-keys nil
+               "" '(:ignore t :which-key ,name))
+             (,sym ,@body))))
+
+    ;; Bookmark leader keys.
+    (use-package bookmark
+      :straight nil
+      :custom
+      (bookmark-save-flag 1)   ;; autosave bookmarks after each change
+      (bookmark-sort-flag t)   ;; keep bookmarks sorted by name
+      :config
+      (+general-global-menu! "bookmark" "b"
+        "j" '(bookmark-jump       :which-key "jump")
+        "s" '(bookmark-set        :which-key "set")
+        "l" '(bookmark-bmenu-list :which-key "list")
+        "d" '(bookmark-delete     :which-key "delete")
+        "r" '(bookmark-rename     :which-key "rename")))
+
+    ;; Faster global chords
+    (require 'bookmark)
+    (global-set-key (kbd "C-x j")   #'bookmark-jump)       ;; jump
+    (global-set-key (kbd "C-x J")   #'bookmark-bmenu-list) ;; list/manage
+    (global-set-key (kbd "C-x M-j") #'bookmark-set)        ;; set    
+#+END_SRC
+
+* System & OS Integration
+
+System / OS integration. These could change between environments.
+
+Dired configurations.
+#+BEGIN_SRC emacs-lisp :eval never :noweb yes :tangle ./modules/system-os.el
+    (use-package dired
+      :straight (:type built-in)
+      :ensure nil
+      :custom (dired-listing-switches "-alh --group-directories-first")
+      :commands (dired dired-jump)
+      :bind (("C-x C-j" . dired-jump)))
+
+  ;; Leader menu for Dired: M-m d …
+  (with-eval-after-load 'dired
+    ;; Only if general.el is available
+    (when (require 'general nil t)
+      (general-define-key
+       :keymaps 'dired-mode-map
+       :prefix "M-m d"
+       "" '(:ignore t :which-key "dired")
+
+       ;; open / jump
+       "d" '(dired :which-key "open dired")
+       "." '((lambda () (interactive) (dired default-directory)) :which-key "here")
+       "j" '(dired-jump :which-key "jump to file")
+       "J" '(dired-jump-other-window :which-key "jump (other win)")
+
+       ;; view / listing
+       "r" '(revert-buffer :which-key "refresh")
+       "h" '(dired-hide-details-mode :which-key "toggle details")
+       "o" '(dired-omit-mode :which-key "toggle dotfiles")
+       "s" '(dired-sort-toggle-or-edit :which-key "sort")
+
+       ;; edit names (wdired)
+       "e" '(wdired-change-to-wdired-mode :which-key "edit names")
+
+       ;; create / file ops
+       "+" '(dired-create-directory :which-key "mkdir")
+       "C" '(dired-do-copy :which-key "copy")
+       "R" '(dired-do-rename :which-key "rename/move")
+       "D" '(dired-do-delete :which-key "delete")
+       "X" '(dired-do-flagged-delete :which-key "delete flagged")
+       "z" '(dired-do-compress :which-key "compress")
+       "T" '(dired-do-touch :which-key "touch mtime")
+       "M" '(dired-do-chmod :which-key "chmod")
+       "O" '(dired-do-chown :which-key "chown")
+
+       ;; marking
+       "m" '(dired-mark :which-key "mark")
+       "u" '(dired-unmark :which-key "unmark")
+       "U" '(dired-unmark-all-marks :which-key "unmark all")
+       "t" '(dired-toggle-marks :which-key "toggle marks")
+
+       ;; search / replace
+       "f" '(dired-do-find-regexp :which-key "find regexp")
+       "Q" '(dired-do-find-regexp-and-replace :which-key "query replace")
+
+       ;; shell
+       "!" '(dired-do-shell-command :which-key "shell cmd")
+       "&" '(dired-do-async-shell-command :which-key "async shell"))))
+
+    (use-package all-the-icons-dired
+      :hook (dired-mode . all-the-icons-dired-mode))
+
+    ;; Launch apps based on content.
+    (use-package dired-open
+      :config
+      (setq dired-open-extensions
+    	'(("png" . "imv")
+    	  ("jpg" . "imv")
+    	  ("pdf" . "zathura")
+    	  ("mp4" . "mpv")
+    	  ("mkv" . "mpv")
+    	  ("html" . "floorp"))))
+
+    ;; Bind enter to launch associated file app.
+    (with-eval-after-load 'dired
+    ;; Replace RET behavior
+    (define-key dired-mode-map (kbd "RET") #'dired-open-file))
+
+
+    (use-package dired-hide-dotfiles
+      :hook (dired-mode . dired-hide-dotfiles-mode))
+
+    ;; Must have dired extensions
+    (use-package peep-dired
+      :ensure t
+      :bind (:map dired-mode-map
+                  ("P" . peep-dired))
+      :hook (peep-dired-mode . (lambda () (setq-local image-dired-display-image-buffer 'other))))
+
+    (use-package dired-subtree
+      :ensure t
+      :bind (:map dired-mode-map
+                  ("<tab>" . dired-subtree-toggle)))
+#+END_SRC
+
+Terminal
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/system-os.el
+  (use-package vterm
+    :commands vterm
+    :bind ("C-c v" . vterm)
+    :config
+    (setq vterm-shell "/usr/bin/fish")
+    (setq vterm-max-scrollback 10000))
+#+END_SRC
+
+* Remote Connections
+
+Connections to my remote machines.
+#+BEGIN_SRC emacs-lisp :eval never :results silent :tangle ./modules/remote.el
+  ;;Debug statements
+  ;;(setq tramp-verbose 10)
+  ;;(setq tramp-debug-buffer t)
+
+  (defun remote/dired-pi-5 ()
+    "Open Dired in home directory on pi-5."
+    (interactive)
+    (dired "/ssh:username@192.168.1.57:/home/username/"))
+
+  (defun remote/dired-lenovo ()
+    "Open Dired in home directory on lenovo."
+    (interactive)
+    (dired "/ssh:username@192.168.1.80:/home/username/"))
+
+  (defun remote/dired-dell ()
+    "Open Dired in home directory on dell."
+    (interactive)
+    (dired "/ssh:username@192.168.1.108:/home/username/"))
+#+END_SRC
+
+* UI
+
+Emacs configuration for usability experience an QOL.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/ui.el
+      ;; Font sizing defaults for UI scaling (override per-host if needed)
+      (defvar my/default-font-size 100)
+      (defvar my/default-variable-font-size 100)
+
+      ;; Frame transparency defaults
+      (defvar my/frame-transparency '(90 . 90))
+
+      ;; Disable unnecessary UI elements
+      (scroll-bar-mode -1)
+      (tool-bar-mode -1)
+      (tooltip-mode -1)
+      (menu-bar-mode -1)
+      (set-fringe-mode 10)
+
+      ;; Set up the visible bell
+      (setq visible-bell t)
+
+      ;; Show column and line numbers
+      (column-number-mode)
+      (global-display-line-numbers-mode t)
+
+      ;; Set frame font and theme
+      (set-face-attribute 'default nil :font "JetBrains Mono" :height my/default-font-size)
+      (set-face-attribute 'fixed-pitch nil :font "Fira Code Retina" :height my/default-font-size)
+      (set-face-attribute 'variable-pitch nil :font "Cantarell" :height my/default-variable-font-size :weight 'regular)
+
+      ;; Apply frame transparency
+      (set-frame-parameter (selected-frame) 'alpha my/frame-transparency)
+      (add-to-list 'default-frame-alist `(alpha . ,my/frame-transparency))
+
+      ;; Themes
+      (use-package spacemacs-theme :defer t)
+      (use-package doom-themes :defer t)
+      (use-package modus-themes :defer t)
+
+      (load-theme 'doom-1337 t)
+
+      (use-package doom-modeline
+        :after (nerd-icons)
+        :config
+        (setq doom-modeline-minor-modes t)
+        (setq doom-modeline-major-mode-icon t)
+        (setq doom-modeline-enable-word-count t)
+        (setq doom-modeline-height 30)
+        (setq doom-modeline-bar-width 5)
+        (setq doom-modeline-indent-info t)
+        (setq doom-modeline-lsp t)
+        (setq doom-modeline-github t)
+        (setq doom-modeline-buffer-modification-icon t)
+        (setq doom-modeline-unicode-fallback t)
+        :hook (after-init . doom-modeline-mode))
+
+         ;; Focus follows mouse
+      (setq mouse-autoselect-window t)
+
+        ;; Setup window borders like wtm
+      (window-divider-mode 1)
+      (setq window-divider-default-places t)
+      (setq window-divider-default-bottom-width 1)
+      (setq window-divider-default-right-width 1)
+
+       ;; Set all borders to orange
+      (set-face-attribute 'window-divider nil :foreground "orange")
+      (set-face-attribute 'vertical-border nil :foreground "orange")
+
+      ;; Mode line borders - also orange
+      (set-face-attribute 'mode-line nil
+                        :background "#4c566a"
+                        :foreground "#eceff4"
+                        :box '(:line-width 1 :color "orange"))
+
+      (set-face-attribute 'mode-line-inactive nil
+                        :background "#2e3440"
+                        :foreground "#88909f"
+                        :box '(:line-width 1 :color "orange"))
+
+    ;; Window shading - active window much darker
+      (defvar my-active-window-background "#000000")    ; Very dark for active
+      (defvar my-inactive-window-background "#2a2a2a")  ; Lighter for inactive
+
+      (defun my-apply-window-shading ()
+      "Apply shading - active window darker, inactive lighter."
+         (dolist (window (window-list))
+           (with-current-buffer (window-buffer window)
+             (face-remap-reset-base 'default)
+             (if (eq window (selected-window))
+                 ;; Active window - much darker
+                 (face-remap-add-relative 'default :background my-active-window-background)
+               ;; Inactive windows - lighter
+               (face-remap-add-relative 'default :background my-inactive-window-background)))))
+
+      ;; Apply shading on window changes
+      (add-hook 'window-selection-change-functions 
+              (lambda (&rest _) (my-apply-window-shading)))
+
+      ;; Protect settings from being overridden
+      (defun my-protect-window-settings (&rest _)
+         (when window-divider-mode
+           (setq window-divider-default-bottom-width 1)
+           (setq window-divider-default-right-width 1))
+         (set-face-attribute 'window-divider nil :foreground "orange")
+         (set-face-attribute 'vertical-border nil :foreground "orange")
+         (my-apply-window-shading))
+
+      (advice-add 'load-theme :after #'my-protect-window-settings)
+
+      ;; Initialize everything
+      (my-apply-window-shading)
+
+      ;; End of Window Configuration
+      (put 'erase-buffer 'disabled nil)
+
+      ;; Show line numbers:
+      (add-hook 'prog-mode-hook 'display-line-numbers-mode)
+      (add-hook 'text-mode-hook 'display-line-numbers-mode)
+      (global-set-key (kbd "<f9>") 'display-line-numbers-mode)
+
+      ;; Show parent parenthesis.
+      (show-paren-mode 1)
+
+      ;; Setup smooth scrolling.
+      (setq scroll-conservatively 1)
+
+      ;; Switch cursor to new window automatically
+      (defun split-and-follow-horizontally ()
+        (interactive)
+        (split-window-below)
+        (balance-windows)
+        (other-window 1))
+      (global-set-key (kbd "C-x 2") 'split-and-follow-horizontally)
+
+      (defun split-and-follow-vertically ()
+        (interactive)
+        (split-window-right)
+        (balance-windows)
+        (other-window 1))
+      (global-set-key (kbd "C-x 3") 'split-and-follow-vertically)  
+
+      ;; Highlight current line.  
+      (add-hook 'after-init-hook 'global-hl-line-mode)
+
+      ;; Bracket pair-matching.
+      (setq electric-pair-pairs '(
+                              (?\{ . ?\})
+                              (?\( . ?\))
+                              (?\[ . ?\])
+                              (?\" . ?\")
+                              ))
+      (electric-pair-mode t)
+
+      ;; Clean up minor mode with minions.
+      (use-package minions
+      :config (minions-mode 1)
+      (setq minions-mode-line-lighter "☰"))
+
+      ;; Icons on Emacs.
+      (use-package nerd-icons
+        :custom
+        (nerd-icons-scale-factor 1.0)
+        (nerd-icons-default-adjust 0.0))
+
+      (use-package nerd-icons-completion      :straight
+        (nerd-icons-completion :type git :host github
+                           :repo "rainstormstudio/nerd-icons-completion")
+        :demand t
+        :hook
+        (marginalia-mode . nerd-icons-completion-marginalia-setup)
+        :config
+        (nerd-icons-completion-mode))
+
+      (use-package nerd-icons-dired
+        :straight (nerd-icons-dired :type git :host github
+                                :repo "rainstormstudio/nerd-icons-dired")
+        :hook
+        (dired-mode . nerd-icons-dired-mode))
+
+      (use-package treemacs-nerd-icons
+        :straight (treemacs-nerd-icons :type git :host github
+                                   :repo "rainstormstudio/treemacs-nerd-icons")
+        :config
+        (with-eval-after-load 'treemacs
+          (treemacs-load-theme "nerd-icons")))
+
+      ;; Better undo + redo
+      (use-package undo-tree
+        :config
+        (global-undo-tree-mode 1))
+
+      ;; Briefly highlight the cursor when switching windows/buffers.
+      (use-package beacon
+        :init
+        (beacon-mode 1))
+
+      ;; Hightlight, index and go to any character by pressing the index key.
+      (use-package avy
+        :bind
+        ("M-s" . avy-goto-char))
+
+      ;; Shows window numbers to select to change window
+      (use-package ace-window
+      :ensure t
+      :bind (("M-o" . ace-window)))
+
+      ;; Better way to switch windows.
+      (use-package switch-window
+        :config
+        (setq switch-window-input-style 'minibuffer)
+        (setq switch-window-increase 4)
+        (setq switch-window-threshold 2)
+        (setq switch-window-shortcut-style 'qwerty)
+        (setq switch-window-qwerty-shortcuts
+    	  '("a" "s" "d" "f" "j" "k" "l"))
+        (setq switch-window-minibuffer-shortcut ?z)
+        :bind
+        ([remap other-window] . switch-window))
+
+        ;; Display page breaks as horizontal lines.
+        (use-package page-break-lines
+          :requires dashboard
+          :init
+          (global-page-break-lines-mode))
+
+      ;; Window management leader keys.
+      (require 'windmove)
+
+      (+general-global-menu! "window" "w"
+        "?" 'split-window-vertically            ;; or use split-window-below
+        "=" 'balance-windows
+        "/" 'split-window-horizontally          ;; or use split-window-right
+        "O" 'delete-other-windows
+        "X" '((lambda () (interactive)
+                (call-interactively #'other-window)
+                (kill-buffer-and-window))
+              :which-key "kill other buf+win")
+        "d" 'delete-window
+        "h" 'windmove-left
+        "j" 'windmove-down
+        "k" 'windmove-up
+        "l" 'windmove-right
+        "o" 'other-window
+        "t" 'window-toggle-side-windows
+        "."  '(:ignore t :which-key "resize")   ;; <-- fixed :ignore
+        ".h" '((lambda () (interactive)
+                 (call-interactively (if (window-prev-sibling)
+                                         #'enlarge-window-horizontally
+                                       #'shrink-window-horizontally)))
+               :which-key "divider left")
+        ".l" '((lambda () (interactive)
+                 (call-interactively (if (window-next-sibling)
+                                         #'enlarge-window-horizontally
+                                       #'shrink-window-horizontally)))
+               :which-key "divider right")
+        ".j" '((lambda () (interactive)
+                 (call-interactively (if (window-next-sibling)
+                                         #'enlarge-window
+                                       #'shrink-window)))
+               :which-key "divider up")
+        ".k" '((lambda () (interactive)
+                 (call-interactively (if (window-prev-sibling)
+                                         #'enlarge-window
+                                       #'shrink-window)))
+               :which-key "divider down")
+        "x" 'kill-buffer-and-window)
+ #+END_SRC
+
+* Org
+
+Dedicated section for Org due to its scope of potential use and integration with emacs native.
+
+Random notes, commands, quotes, etc. file.
+#+NAME: random-notes-dir
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "~/Documents/Office-Docs (Global Sync)/random_notes.org")
+#+END_SRC
+
+#+RESULTS: random-notes-dir
+: "~/Documents/Office-Docs (Global Sync)/random_notes.org"
+
+Random notes function for my mini knowledge base. I'll expand on this in the future.
+#+BEGIN_SRC emacs-lisp :eval never :noweb yes :tangle ./modules/org.el
+;; Tell straight not to fetch/build Org; use Emacs' built-in instead.
+  (use-package org
+    :straight (:type built-in))
+  
+  (use-package org
+         :defer t )
+   
+   (setq my/random-notes-file <<random-notes-dir()>>)
+
+     ;; Org Capture Template
+     (setq org-capture-templates
+           '(("r" "Random quick note"
+              entry
+              (file+headline my/random-notes-file "Inbox")
+              "* %U %?\n  :tags: %^{Tags}\n"
+              :empty-lines 1)))
+     (global-set-key (kbd "C-c r") 'org-capture)
+ #+END_SRC
+
+ Enable python code blocks in babel.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/org.el
+ (org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((python . t)))
+ #+END_SRC
+ 
+* Email
+
+Dedicated section for email due to its scope of potential use and integration with emacs native.
+#+NAME: yahoo-email-dir
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "~/Maildir/yahoo")
+#+END_SRC
+
+#+RESULTS: yahoo-email-dir
+: "~/Maildir/yahoo"
+
+#+NAME: yahoo-email-address
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "mkburns61@yahoo.com")    
+#+END_SRC
+
+#+RESULTS: yahoo-email-address
+: "mkburns61@yahoo.com"
+
+#+NAME: yahoo-email-fullname
+#+BEGIN_SRC emacs-lisp :results value
+  (format "\"%s\"" "Mike Burns")    
+#+END_SRC
+
+#+RESULTS: yahoo-email-fullname
+: "Mike Burns"
+
+Big brother contacts database location.
+#+NAME: bbdb-dir
+#+BEGIN_SRC emacs-lisp :noweb yes :results value
+  (format "\"%s\"" (concat <<emacs-common-dir()>>"/bbdb"))
+#+END_SRC
+
+#+RESULTS: bbdb-dir
+: "~/.config/emacs-common/bbdb"
+
+Mu4e configuration.
+#+BEGIN_SRC emacs-lisp :eval never :noweb yes :tangle ./modules/email.el
+    (add-to-list 'load-path "/usr/share/emacs/site-lisp/mu4e")
+    (require 'mu4e)
+
+    (setq mu4e-maildir <<yahoo-email-dir()>>) ;; or wherever your Maildir lives
+    (require 'mu4e)
+
+    (setq user-mail-address <<yahoo-email-address()>>)
+    (setq user-full-name <<yahoo-email-fullname()>>)
+
+    (setq send-mail-function 'sendmail-send-it
+          message-send-mail-function 'sendmail-send-it
+          sendmail-program "/usr/bin/msmtp"
+          mail-specify-envelope-from t
+          mail-envelope-from 'header)
+
+    (defun my/run-mbsync ()
+      "Run mbsync to sync mail."
+      (start-process-shell-command "mbsync" "*mbsync*" "mbsync -a"))
+
+    ;; Run every 5 minutes (adjust as needed)
+    (run-at-time "5 min" 300 #'my/run-mbsync)
+
+    (setq mu4e-update-interval 300)  ;; 5 minutes
+
+    ;; Setup image preview
+    (setq mu4e-view-show-images t)
+    (setq mu4e-view-use-gnus t) 
+    (setq mu4e-view-image-max-width 800)
+    (setq mu4e-view-show-addresses 't)
+
+    (setq shr-inhibit-images nil)
+    (setq gnus-inhibit-images nil)
+
+    (defun my-mu4e-view-inline-images ()
+      "Show images automatically in mu4e."
+      (when (fboundp 'shr-put-image)
+        (setq mu4e-view-show-images t)))
+
+    (setq url-privacy-level 'low)
+
+    (defun my/mu4e-view-message-no-focus ()
+      "View the current message in another window without changing focus."
+      (interactive)
+      (let ((msg (mu4e-message-at-point)))
+        (when msg
+          (save-selected-window
+            (mu4e-view msg)))))
+
+    (with-eval-after-load 'mu4e
+      (define-key mu4e-headers-mode-map (kbd "V") #'my/mu4e-view-message-no-focus))
+
+    ;; Open email in a dedicated frame for better workflow.
+    (defun my/mu4e-open-in-dedicated-frame ()
+      "Open mu4e in a dedicated frame named 'mu4e'."
+      (interactive)
+      (let ((bufname "*mu4e*"))
+        (if (get-buffer bufname)
+            ;; If buffer already exists, raise the frame or switch to it
+            (progn
+              (select-frame-set-input-focus
+               (window-frame (get-buffer-window bufname))))
+          ;; Else create new frame and launch mu4e
+    	(let* ((frame (make-frame '((name . "mu4e")
+                                      (width . 100)
+                                      (height . 40)))))
+            (select-frame-set-input-focus frame)
+            (with-selected-frame frame
+              (mu4e)
+              (set-window-dedicated-p (selected-window) t))))))
+
+    ;; Use bbdb for email contacts configuration.
+    (use-package bbdb
+          :defer t )
+
+    (setq bbdb-file <<bbdb-dir()>>)
+    (require 'bbdb)
+    (require 'bbdb-com)
+    (bbdb-initialize 'mu4e 'message)
+
+    (setq mu4e-use-bbdb t)
+
+    (bbdb-mua-auto-update-init 'mu4e)
+
+    (setq message-completion-alist
+        '((message-to . bbdb-complete-mail)
+          (message-cc . bbdb-complete-mail)
+          (message-bcc . bbdb-complete-mail)))
+
+    (define-key message-mode-map (kbd "TAB") 'bbdb-complete-mail)
+
+  ;; --- Mu4e leader menu ---
+  (with-eval-after-load 'mu4e
+    ;; DWIM wrappers so reply/all/forward work from headers or view
+    (defun my/mu4e-reply ()      (interactive) (call-interactively #'mu4e-compose-reply))
+    (defun my/mu4e-reply-all ()  (interactive) (call-interactively #'mu4e-compose-wide-reply))
+    (defun my/mu4e-forward ()    (interactive) (call-interactively #'mu4e-compose-forward))
+
+    (+general-global-menu! "mail" "e"
+      ;; open / sync
+      "m" '(mu4e                       :which-key "open mu4e")
+      "u" '(mu4e-update-mail-and-index :which-key "update & index")
+      ;; compose
+      "c" '(mu4e-compose-new           :which-key "new email")
+      "r" '(my/mu4e-reply              :which-key "reply")
+      "a" '(my/mu4e-reply-all          :which-key "reply all")
+      "f" '(my/mu4e-forward            :which-key "forward")
+      ;; search
+      "s" '(mu4e-headers-search        :which-key "search")
+      "S" '(mu4e-headers-search-edit   :which-key "edit last search")))
+
+  ;; Compose-mode keys: send / draft / abort
+  (with-eval-after-load 'mu4e-compose
+    (general-define-key
+     :keymaps 'mu4e-compose-mode-map
+     :prefix "M-m"
+     "m s" '(message-send-and-exit :which-key "send & exit")
+     "m d" '(message-dont-send     :which-key "save draft")
+     "m A" '(message-kill-buffer   :which-key "abort")))
+#+END_SRC
+
+* Dev Environment
+
+My dev envrionments.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/dev.el
+  (use-package typescript-mode
+    :mode "\\.ts\\'")
+
+  (use-package python-mode
+    :hook (python-mode . eglot-ensure))
+
+  (use-package pyvenv
+    :config (pyvenv-mode 1))
+
+  (use-package projectile
+    :diminish projectile-mode
+    :config (projectile-mode)
+    :custom ((projectile-completion-system 'ivy))
+    :bind-keymap
+    ("C-c p" . projectile-command-map)
+    :init
+    (when (file-directory-p "~/Documents/Code")
+      (setq projectile-project-search-path '("~/Documents/Code")))
+    (setq projectile-switch-project-action #'projectile-dired))
+
+  (use-package counsel-projectile
+    :config (counsel-projectile-mode))
+
+  (use-package rainbow-delimiters
+    :hook (prog-mode . rainbow-delimiters-mode))
+
+  (use-package request
+  :ensure t)
+
+  (require 'request)
+  (require 'json)
+
+  ;; Git integration.
+  (use-package magit
+    :config
+    (setq magit-push-always-verify nil)
+    (setq git-commit-summary-max-length 50)
+    :bind
+    ("M-g" . magit-status))
+
+  (use-package treemacs-magit
+    :after treemacs magit)
+
+  (use-package ghub
+    :demand t
+    :after magit)  
+
+  ;; Enable Eglot automatically for certain modes
+  (add-hook 'python-mode-hook #'eglot-ensure)
+
+#+END_SRC
+
+* AI
+
+My AI envrionments.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/ai.el
+    ;; ChatGPT AI integration.
+  (use-package chatgpt-shell
+    :ensure t
+    :config
+    (setq chatgpt-shell-save-session t)
+    (global-set-key (kbd "C-c g") #'chatgpt-shell)
+    (setq chatgpt-shell-openai-key my-openai-api-key)
+    (setq chatgpt-shell-anthropic-key my-anthropic-api-key)
+    (setq chatgpt-shell-google-key my-gemini-api-key))
+
+  (use-package ollama-buddy
+    :ensure t
+    :commands (ollama-buddy-chat ollama-buddy-prompt-region ollama-buddy-prompt-buffer)
+    :config)
+        
+#+END_SRC
+
+* Text editing
+
+I've added this section for configurations that are specific to text edit,
+for example fill-column options.
+
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/editing-text.el
+  ;; --- Defaults ---------------------------------------------------------------
+
+  (setq-default fill-column 80)              ;; used for hard wrap (auto-fill / M-q)
+  (setq sentence-end-double-space nil)
+  (setq comment-auto-fill-only-comments t)
+
+  ;; Show a guide in code buffers (redundant for prose when using VFC)
+  (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
+
+  ;; --- Prose wrapping helpers -------------------------------------------------
+
+  (defvar my/prose-width 88
+    "Preferred visual text width for prose buffers (Org/Markdown/Text).")
+
+  (defun my/enable-prose-wrapping ()
+    "Soft-wrap at `my/prose-width` with centered text (no hard line breaks)."
+    (setq-local truncate-lines nil)
+    (setq-local visual-fill-column-width my/prose-width)
+    (visual-line-mode 1)
+    (when (boundp 'display-fill-column-indicator-mode)
+      (display-fill-column-indicator-mode 0))
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode 1)))
+
+  (defun my/text-soft-wrap ()
+    "Soft wrap at window/visual width (no hard breaks)."
+    (interactive)
+    (setq-local truncate-lines nil)
+    (visual-line-mode 1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode 1))
+    (message "wrap: soft (visual)%s"
+             (if (bound-and-true-p visual-fill-column-mode)
+                 (format " @ %d" (or visual-fill-column-width my/prose-width))
+               "")))
+
+  (defun my/text-hard-wrap ()
+    "Hard wrap at `fill-column` (auto-fill)."
+    (interactive)
+    (visual-line-mode 0)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode -1))
+    (auto-fill-mode 1)
+    (message "wrap: hard (auto-fill) @ %d" fill-column))
+
+  (defun my/toggle-wrap ()
+    "Cycle: off → soft → hard."
+    (interactive)
+    (cond
+     ((and (not visual-line-mode) (not auto-fill-function))
+      (my/text-soft-wrap))
+     ((and visual-line-mode (not auto-fill-function))
+      (my/text-hard-wrap))
+     (t
+      (visual-line-mode 0)
+      (when (fboundp 'visual-fill-column-mode)
+        (visual-fill-column-mode -1))
+      (auto-fill-mode 0)
+      (message "wrap: off"))))
+
+  (defun my/set-fill-column (n)
+    "Set buffer-local `fill-column` to N and update indicator."
+    (interactive "nFill column: ")
+    (setq-local fill-column n
+                display-fill-column-indicator-column n)
+    (when (bound-and-true-p display-fill-column-indicator-mode)
+      (force-window-update (current-buffer)))
+    (message "fill-column → %d" n))
+
+  ;; --- visual-fill-column (soft wrap at fixed width) --------------------------
+
+  (use-package visual-fill-column
+    :straight t
+    :commands (visual-fill-column-mode visual-fill-column-split-window-sensibly)
+    :init
+    ;; Center text; set to nil if you prefer left-aligned.
+    (setq visual-fill-column-center-text nil)
+    ;; Make window splitting respect VFC margins.
+    (setq split-window-preferred-function
+          #'visual-fill-column-split-window-sensibly)
+    :hook
+    ((text-mode markdown-mode org-mode) . my/enable-prose-wrapping))
+
+  ;; Convenience commands to adjust visual width on the fly
+  (defun my/vfc-set-width (n)
+    "Set the visual body width to N columns in this buffer."
+    (interactive "nVisual width (cols): ")
+    (setq-local visual-fill-column-width n)
+    (when (bound-and-true-p visual-fill-column-mode)
+      (visual-fill-column-mode -1)
+      (visual-fill-column-mode 1))
+    (message "visual width → %d" n))
+
+  (defun my/vfc-wider (n)
+    "Widen visual body by prefix N (default 2) columns."
+    (interactive "p")
+    (my/vfc-set-width (+ (or visual-fill-column-width my/prose-width 80)
+                         (or n 2))))
+
+  (defun my/vfc-narrower (n)
+    "Narrow visual body by prefix N (default 2) columns (min 40)."
+    (interactive "p")
+    (my/vfc-set-width (max 40
+                           (- (or visual-fill-column-width my/prose-width 80)
+                              (or n 2)))))
+
+  (defun my/vfc-toggle ()
+    "Toggle visual-fill-column + visual-line for this buffer."
+    (interactive)
+    (if (bound-and-true-p visual-fill-column-mode)
+        (progn
+          (visual-fill-column-mode -1)
+          (visual-line-mode -1)
+          (message "visual-fill-column: off"))
+      (my/enable-prose-wrapping)
+      (message "visual-fill-column: on @ %d"
+               (or visual-fill-column-width my/prose-width))))
+
+  ;; --- Org-specific -----------------------------------------------------------
+
+  ;; Org starts truncated by default; disable so wrapping works as expected.
+  (setq org-startup-truncated nil)
+
+  ;; --- Leader keys ------------------------------------------------------------
+  (+general-global-menu! "text" "t"
+    ;; Visual fill controls
+    "v" 'my/vfc-toggle
+    "V" 'my/vfc-set-width
+    "]" 'my/vfc-wider
+    "[" 'my/vfc-narrower
+
+    ;; Wrap style
+    "w" 'my/toggle-wrap
+    "s" 'my/text-soft-wrap
+    "h" 'my/text-hard-wrap
+
+    ;; Fill column
+    "c" 'my/set-fill-column)
+
+  ;; Markdown mode
+(use-package markdown-mode
+  :straight t
+  :mode (("README\\.md\\'" . gfm-mode)
+         ("\\.md\\'"       . markdown-mode)
+         ("\\.markdown\\'" . markdown-mode))
+  :init
+  ;; Optional: use pandoc for conversions from within markdown-mode
+  ;; (setq markdown-command "pandoc -f gfm -t html")
+  (setq markdown-hide-markup t          ; cleaner look (toggle: markdown-toggle-markup-hiding)
+        markdown-fontify-code-blocks-natively t
+        markdown-enable-math t)
+  :hook
+  ((markdown-mode gfm-mode) . my/enable-prose-wrapping))
+
+;; --- Leader keys (uses your +general-global-menu! macro) -------------------
+(+general-global-menu! "markdown" "m"
+  "p" 'markdown-live-preview-mode      ;; start/stop built-in HTML preview
+  "b" 'markdown-insert-bold
+  "i" 'markdown-insert-italic
+  "c" 'markdown-insert-code
+  "l" 'markdown-insert-link
+  "h" 'markdown-toggle-markup-hiding)
+
+  (provide 'editing-text)
+  ;;; editing-text.el ends here  
+#+END_SRC
+
+* My Functions
+
+This section is dedicated to my custom functions. 
+
+Niri literate config.kdl tangle and deploy. This function will evaluate
+and tangle the niri config.kdl and deploy it into the correct niri
+directory, with included rollback capability.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+(defun niri-babel-build-and-deploy ()
+  "Tangle and deploy config.kdl to ~/.config/niri/config.kdl with 5 rotating backups.
+Also copy key_bindings.txt to ~/.config/niri/ if present."
+  (interactive)
+  (let* ((org-file   "~/projects/niri_babel_config/niri_config.org")
+         (output-dir "~/projects/niri_babel_config/")
+         (output-file (expand-file-name "config.kdl" output-dir))
+         (kb-src      (expand-file-name "key_bindings.txt" output-dir))
+         (target-dir  (expand-file-name "~/.config/niri/"))
+         (target-file (expand-file-name "config.kdl" target-dir))
+         (kb-target   (expand-file-name "key_bindings.txt" target-dir)))
+
+    ;; Execute all non-KDL blocks first
+    (with-current-buffer (find-file-noselect org-file)
+      (org-babel-map-src-blocks org-file
+        (let* ((info (org-babel-get-src-block-info 'light))
+               (lang (nth 0 info)))
+          (unless (string= lang "kdl")
+            (org-babel-execute-src-block))))
+      ;; Tangle everything
+      (org-babel-tangle))
+
+    ;; Ensure target directory exists
+    (make-directory target-dir t)
+
+    ;; Backup rotation (keep last 5) for config.kdl
+    (when (file-exists-p target-file)
+      (dotimes (i 5)
+        (let* ((n (- 5 i))
+               (old (format "%s.%03d" target-file n))
+               (new (format "%s.%03d" target-file (1+ n))))
+          (when (file-exists-p old)
+            (rename-file old new t))))
+      (copy-file target-file (format "%s.001" target-file) t))
+
+    ;; Deploy new config.kdl
+    (when (file-exists-p output-file)
+      (copy-file output-file target-file t)
+      (message "Tangled and deployed config.kdl to %s" target-file))
+
+    ;; Copy key_bindings.txt if present
+    (when (file-exists-p kb-src)
+      (copy-file kb-src kb-target t)
+      (message "Copied key_bindings.txt to %s" kb-target))))
+#+END_SRC
+
+
+This is a prototype / test / learning function. To use it add this function to
+emacsclient startup and it will display thumbnails for the screenshots directory,
+allow you to select a single thumbnail, copy it to the clipboard and exit.
+This is used in niri with a similar function using feh. The goal was to see
+how close emacs could reproduce the feh functionality. The results are pretty
+good and this is currently wired as a keybind in niri as is feh.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+     (require 'image-dired)
+
+     (defun my/image-dired-copy-and-exit ()
+       "Copy image under point in image-dired and exit Emacsclient."
+       (interactive)
+       (let* ((file (image-dired-original-file-name))
+              (copy-prog (or (executable-find "wl-copy")
+                             (executable-find "xclip"))))
+         (unless copy-prog
+           (error "No clipboard utility (wl-copy or xclip) found"))
+         (unless (and file (file-exists-p file))
+           (error "No image found under cursor"))
+         (with-temp-buffer
+           (insert-file-contents-literally file)
+           (call-process-region
+            (point-min) (point-max)
+            copy-prog nil nil nil "-t" "image/png"))
+         (save-buffers-kill-terminal)))
+
+     (with-eval-after-load 'image-dired
+       ;; `m` to copy and exit
+       (define-key image-dired-thumbnail-mode-map (kbd "m") #'my/image-dired-copy-and-exit)
+       ;; `q` to just quit
+       (define-key image-dired-thumbnail-mode-map (kbd "q")
+         (lambda ()
+           (interactive)
+           (save-buffers-kill-terminal))))
+
+     (defun my/image-picker-thumbnail-mode ()
+       "Launch thumbnail-only image picker. Press `m` to copy & exit."
+       (interactive)
+       (let ((dir "~/Pictures/screenshots/"))
+         ;; Save current window configuration, run image-dired
+         (image-dired dir)
+         ;; Force delete all windows except the one showing *image-dired*
+         (let ((image-buffer "*image-dired*"))
+           (dolist (win (window-list))
+             (unless (eq (window-buffer win) (get-buffer image-buffer))
+               (delete-window win)))
+           (select-window (get-buffer-window image-buffer)))))
+ #+END_SRC
+
+Show the server name that this emacsclient is connected to.
+ #+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+    ;; Show the server name that this emacsclient is connected to.
+    (defun show-current-server-name ()
+      "Display the name of the Emacs server this client is connected to."
+      (interactive)
+      (message "Connected to Emacs server: %s" server-name))
+
+    ;; Then bind it in the startup hook
+    (add-hook 'emacs-startup-hook
+              (lambda ()
+                (global-set-key (kbd "<f12>") #'show-current-server-name)))
+ #+END_SRC
+
+List niri active windows.
+ #+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+   ;; Output niri-windows to new buffer
+   (defun niri-windows ()
+     "Show Niri windows in a new buffer."
+     (interactive)
+     (let ((buf (get-buffer-create "*niri-windows*")))
+       (with-current-buffer buf
+         (read-only-mode -1)
+         (erase-buffer)
+         (call-process "~/projects/niri_toolkit/niri-windows.py" nil buf)
+         (goto-char (point-min))
+         (read-only-mode 1))
+       (pop-to-buffer buf)))
+ #+END_SRC
+
+Connect to niri IPC and display events in a buffer.
+  #+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+   ;;Output niri-event-stream via IPC to new buffer
+   (defun niri-event-stream ()
+     "Show the Niri event stream in a new buffer."
+     (interactive)
+     (let ((buf (get-buffer-create "*Niri Event Stream*")))
+       (apply 'make-comint-in-buffer
+              "Niri Event Stream"
+              buf
+              (expand-file-name "~/projects/niri_toolkit/niri-tail-event-stream.py")
+              nil)
+       (pop-to-buffer buf)))
+ #+END_SRC
+
+Mount my timeshift backup and dir.
+To use this execute the following commands from cli:
+ sudo mkdir -p /mnt/timeshift
+ sudo mount -o ro /dev/sdb1 /mnt/timeshift
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+(defun open-timeshift-backup ()
+  "Open already-mounted Timeshift backup in Dired."
+  (interactive)
+  (let ((mount-point "/mnt/timeshift"))
+    (if (file-directory-p mount-point)
+        (dired mount-point)
+      (message "Mount point does not exist or is not accessible: %s" mount-point))))
+ #+END_SRC    
+
+Remove all results from org-babel buffer.
+#+BEGIN_SRC emacs-lisp :eval never :tangle ./modules/my-functions.el
+(defun my/ob-remove-all-results ()
+  "Delete every #+RESULTS in the current Org buffer.
+If a region is active, operate only within that region."
+  (interactive)
+  (require 'ob)
+  (save-excursion
+    (save-restriction
+      (when (use-region-p)
+        (narrow-to-region (region-beginning) (region-end)))
+      (let ((n 0))
+        (org-babel-map-src-blocks nil
+          ;; Here, point is at the #+begin_src line.
+          (when (org-babel-where-is-src-block-result)
+            (org-babel-remove-result)
+            (cl-incf n)))
+        (message "Removed %d result block(s)." n)))))
+#+END_SRC
+
+Deploy emacs configurations and mark deployment date.
+#+BEGIN_SRC emacs-lisp :eval never :noweb yes :tangle ./modules/my-functions.el
+  (defun emacs-babel-build-and-deploy ()
+    "Tangle and deploy Emacs config to proper env directory with backup and timestamp."
+    (interactive)
+    (let* ((target-env <<target-env()>>)  ;; Assumes `target-env` is a custom function
+           (org-file "~/projects/emacs_babel_config/emacs_config.org")
+           (modules-dir (expand-file-name (format "~/.config/%s/modules" target-env)))
+           (src-dir (expand-file-name "~/projects/emacs_babel_config/modules/"))
+           (timestamp-file (expand-file-name
+                            (format "~/.config/%s/last_deployed.org" target-env))))
+
+      ;; Debug
+      (message "Target env: %s" target-env)
+
+      ;; Run non-Elisp blocks to update values
+      (with-current-buffer (find-file-noselect org-file)
+        (org-babel-map-src-blocks org-file
+          (let* ((info (org-babel-get-src-block-info 'light)))
+            (when info
+              (let ((lang (nth 0 info)))
+                (unless (string= lang "emacs-lisp")
+                  (org-babel-execute-src-block))))))
+
+      ;; Tangle all blocks
+      (org-babel-tangle)
+
+      ;; Copy modules
+      (when (file-directory-p src-dir)
+        (make-directory modules-dir t)
+        (dolist (file (directory-files src-dir t "^[^.].*"))  ; skip dotfiles
+          (copy-file file
+                     (expand-file-name (file-name-nondirectory file) modules-dir)
+                     t)))
+
+      ;; Also copy init.el and early-init.el into the target env dir
+      (let* ((target-dir (file-name-directory modules-dir))
+             (project-root (file-name-directory org-file))
+             (init-src  (expand-file-name "init.el" project-root))
+             (early-src (expand-file-name "early-init.el" project-root))
+             (init-dest  (expand-file-name "init.el" target-dir))
+             (early-dest (expand-file-name "early-init.el" target-dir)))
+        (when (file-exists-p init-src)
+  	(copy-file init-src init-dest t))
+        (when (file-exists-p early-src)
+  	(copy-file early-src early-dest t)))
+
+      ;; Write timestamp
+      (with-temp-file timestamp-file
+        (insert (format "* Last Deployed\n\nDeployed at: %s\n" (current-time-string))))
+
+      (message "Emacs config deployed to %s" modules-dir))))
+#+END_SRC
+
+Toggle me to the previous buffer but...filter out <buffers> and <dired lists>
+when toggling. So basically remove all the steps it took me to get from buffer a
+to buffer b when toggling back and forth.
+#+BEGIN_SRC emacs-lisp :eval never :noweb yes :tangle ./modules/my-functions.el
+  ;; Toggle to last buffer, but filter out dired and buffer list results
+  ;; when going back.
+  (require 'seq)      ;; built-in since Emacs 25
+
+  (defvar my/skip-back-buffer-modes
+    '(dired-mode ibuffer-mode Buffer-menu-mode)
+    "Major modes to skip when jumping back to the previous buffer.")
+
+  (defun my/other-buffer-skip-browsers ()
+    "Switch to the most recent buffer for this window that is not in
+  `my/skip-back-buffer-modes`. Falls back to `mode-line-other-buffer`."
+    (interactive)
+    (let* ((cands   (mapcar #'car (window-prev-buffers)))   ;; per-window history
+           (target  (seq-find
+                     (lambda (buf)
+                       (and (buffer-live-p buf)
+                            (with-current-buffer buf
+                              (not (apply #'derived-mode-p my/skip-back-buffer-modes)))))
+                     cands)))
+      (if target
+          (switch-to-buffer target)
+        (mode-line-other-buffer))))
+
+  (global-set-key (kbd "C-c b") #'my/other-buffer-skip-browsers)
+#+END_SRC

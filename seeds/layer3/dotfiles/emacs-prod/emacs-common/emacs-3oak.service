@@ -1,0 +1,13 @@
+[Unit]
+Description=Emacs daemon for 3oak archived email
+Documentation=info:emacs man:emacs(1)
+
+[Service]
+Type=forking
+Environment=MUHOME=%h/3oak-Email/.mu
+ExecStart=%h/.local/bin/emacs-profile emacs-3oak
+ExecStop=/usr/bin/emacsclient --socket-name=emacs-3oak --eval "(kill-emacs)"
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

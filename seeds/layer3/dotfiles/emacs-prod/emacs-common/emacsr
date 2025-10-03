@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# List of Emacs-related user services to restart
+echo "bash..."
+services=(
+  emacs.service
+  emacs-prod.service
+  emacs-dev.service
+)
+
+for service in "${services[@]}"; do
+  echo "Restarting $service..."
+  systemctl --user restart "$service"
+done
+
+echo "✅ All Emacs services restarted."
