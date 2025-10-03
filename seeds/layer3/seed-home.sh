@@ -236,3 +236,20 @@ UNIT
 
 ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
+
+# ----- Ensure Nix is on PATH for login shells (system-wide) -----
+install -d -m 755 "$ROOT_MNT/etc/profile.d" "$ROOT_MNT/etc/zsh"
+cat > "$ROOT_MNT/etc/profile.d/99-nix-daemon.sh" <<'EOPATH'
+# Nix (multi-user) login shell integration
+if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+  . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+fi
+EOPATH
+
+# Zsh login shells source zprofile
+if ! grep -qs 'nix-daemon.sh' "$ROOT_MNT/etc/zsh/zprofile" 2>/dev/null; then
+  {
+    echo '# Source Nix daemon env on login (added by sysclone Layer3)'
+    echo '[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+  } >> "$ROOT_MNT/etc/zsh/zprofile"
+fi
