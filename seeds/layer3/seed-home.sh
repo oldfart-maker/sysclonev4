@@ -267,3 +267,19 @@ if [[ -d "seeds/layer3/dotfiles" ]]; then
   install -d -m 755 "$ROOT_MNT/etc/sysclone/home/dotfiles"
   rsync -a "seeds/layer3/dotfiles/" "$ROOT_MNT/etc/sysclone/home/dotfiles/"
 fi
+# ----- sysclone: ensure ~/.local exists & owned before ~/.local/bin in runner -----
+# We append into the runner file on the CARD to avoid fragile seed-time text surgery.
+# Only inject once.
+if ! grep -q '/home/\$USERNAME/.local/bin' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
+  ed -s "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'ED'
+/^chown -R "\$USERNAME:\$USERNAME" "\$HM_DIR"$/
+a
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local"
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.local" || true
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/bin"
+.
+w
+q
+ED
+fi
+## sysclone: ensure ~/.local exists & owned before ~/.local/bin
