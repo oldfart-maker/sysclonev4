@@ -300,3 +300,20 @@ q
 ED
 fi
 ## sysclone: ensure ~/.config exists & owned before emacs-prod tangle
+# ----- sysclone: ensure ~/.config is user-owned and emacs-prod/modules exist -----
+# Patch the runner on the card after it is written
+if ! grep -q '/home/\$USERNAME/.config/emacs-prod/modules' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
+  ed -s "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'ED'
+/^chown -R "\$USERNAME:\$USERNAME" "\$HM_DIR"$/
+a
+# config self-heal
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config"
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" || true
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/modules"
+.
+w
+q
+ED
+fi
+## sysclone: config self-heal
