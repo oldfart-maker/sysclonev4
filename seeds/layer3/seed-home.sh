@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Seed Layer 3: Nix (multi-user) + Home Manager on Arch target (host-side)
-# Writes onto TARGET rootfs:
-#   - /usr/local/sbin/sysclone-layer3-home.sh  (runner)
-#   - /etc/systemd/system/sysclone-layer3-home.service
-#   - /etc/sysclone/home/{flake.nix,home.nix,modules/00-user.nix}
-#   - /etc/sysclone/home/vendor/{home-manager,nixpkgs} if present in seeds
-# Requires ROOT_MNT to be set by the Makefile (we do NOT chroot).
 
 ROOT_MNT="${ROOT_MNT:?ROOT_MNT is required}"
 USERNAME="${USERNAME:-username}"
@@ -21,7 +15,7 @@ install -d -m 755 \
   "$ROOT_MNT/etc/nix" \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 
-# ---------- copy vendored repos from HOST to CARD (if present) ----------
+# Copy vendored repos if present
 if [[ -d "seeds/layer3/vendor/home-manager" ]]; then
   rsync -a --delete "seeds/layer3/vendor/home-manager/" "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/"
 fi
@@ -29,7 +23,7 @@ if [[ -d "seeds/layer3/vendor/nixpkgs" ]]; then
   rsync -a --delete "seeds/layer3/vendor/nixpkgs/" "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs/"
 fi
 
-# ---------- write vendor-aware flake.nix on the CARD (leave USERNAME_PLACEHOLDER) ----------
+# flake.nix (vendor-aware)
 if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs/.git" && -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/.git" ]]; then
   cat > "$ROOT_MNT/etc/sysclone/home/flake.nix" <<'FLK'
 {
@@ -95,21 +89,31 @@ else
 FLK
 fi
 
-# minimal home.nix (only if absent); leave USERNAME_PLACEHOLDER
-if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
-  cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'HOME'
-{ config, pkgs, ... }:
+# home.nix (now ensures dirs and PATH)
+cat > "$ROOT_MNT/etc/sysclone/home/home.nix" <<'HOME'
+{ config, lib, pkgs, ... }:
 {
   programs.home-manager.enable = true;
   home.username = "USERNAME_PLACEHOLDER";
   home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
   home.stateVersion = "24.05";
+
+  # put ~/.local/bin on PATH
+  home.sessionPath = [ "$HOME/.local/bin" ];
+
+  # ensure required dirs always exist & are user-owned before linkGeneration
+  home.activation.ensureUserDirs = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+    install -d -m 755 -o "$USER" -g "$USER" "$HOME/.local/bin"
+    install -d -m 755 -o "$USER" -g "$USER" "$HOME/.config/emacs-prod"
+    install -d -m 755 -o "$USER" -g "$USER" "$HOME/.config/emacs-prod/modules"
+    install -d -m 755 -o "$USER" -g "$USER" "$HOME/.config/emacs-prod/emacs_babel_config"
+  '';
+
   home.packages = with pkgs; [ git ripgrep ];
 }
 HOME
-fi
 
-# guard module to ensure username is set (included before home.nix)
+# guard module
 cat > "$ROOT_MNT/etc/sysclone/home/modules/00-user.nix" <<'MOD'
 { config, lib, ... }:
 let u = config.home.username or null;
@@ -121,21 +125,17 @@ in {
 }
 MOD
 
-# ---------- on-target runner (baked-in perms & tangle dir fix) ----------
+# runner (unchanged, includes perms & tangle dir real dir)
 cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOS'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export HOME=/root
-
 STAMP="/var/lib/sysclone/.layer3-home-done"
 [[ -f "$STAMP" ]] && { echo "[layer3] already applied"; exit 0; }
 
-# Optional env from firstboot
 ENV_FILE="/etc/sysclone/firstboot.env"
 [[ -r "$ENV_FILE" ]] && . "$ENV_FILE"
 
-# Resolve USERNAME:
-# 1) from env if provided; 2) first uid>=1000 user; 3) fallback "username"
 if [[ -z "${USERNAME:-}" ]]; then
   USERNAME="$(awk -F: '$3>=1000 && $1!="nobody"{print $1; exit}' /etc/passwd || true)"
   USERNAME="${USERNAME:-username}"
@@ -143,24 +143,20 @@ fi
 export USERNAME
 log(){ printf '%s %s\n' "[layer3]" "$*"; }
 
-# Ensure curl present (Arch)
 if ! command -v curl >/dev/null 2>&1; then
   log "installing curl (pacman)"
   pacman --noconfirm -Sy curl ca-certificates || true
 fi
 
-# Install Nix (multi-user)
 if [[ ! -d /nix ]]; then
   log "installing nix (multi-user, daemon)"
   sh <(curl -fsSL https://nixos.org/nix/install) --daemon --yes
 fi
 
-# Make nix CLI available
 if [[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 fi
 
-# Nix config (trust USERNAME to avoid restricted-setting warnings)
 install -d -m 755 /etc/nix
 cat >/etc/nix/nix.conf <<EONC
 experimental-features = nix-command flakes
@@ -176,12 +172,10 @@ HM_DIR="/etc/sysclone/home"
 if [[ ! -f "$HM_DIR/flake.nix" ]]; then log "HM flake missing at $HM_DIR"; exit 1; fi
 if ! id -u "$USERNAME" >/dev/null 2>&1; then log "user $USERNAME missing"; exit 1; fi
 
-# Fill placeholders using the resolved USERNAME (idempotent)
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/flake.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/home.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/modules/00-user.nix" || true
 
-# Ensure home dirs exist and are user-owned BEFORE HM activation
 chown -R "$USERNAME:$USERNAME" "$HM_DIR"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.cache" "/home/$USERNAME/.config" "/home/$USERNAME/.local/state"
@@ -195,14 +189,12 @@ install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-p
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/modules"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/emacs_babel_config"
 
-# Make the tangle destination a real, writable dir (not a symlink)
 EMACS_TANGLE_DIR="/home/$USERNAME/.config/emacs-prod/emacs_babel_config/modules"
 if [[ -L "$EMACS_TANGLE_DIR" ]] || [[ ! -w "$EMACS_TANGLE_DIR" ]]; then
   rm -rf "$EMACS_TANGLE_DIR" 2>/dev/null || true
   install -d -m 755 -o "$USERNAME" -g "$USERNAME" "$EMACS_TANGLE_DIR"
 fi
 
-# Prefer vendored Home Manager if present
 if [[ -d "$HM_DIR/vendor/home-manager/.git" ]]; then
   HM_SRC="$HM_DIR/vendor/home-manager"
 else
@@ -236,7 +228,7 @@ exit 1
 EOS
 chmod 0755 "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"
 
-# ---------- systemd unit ----------
+# unit
 cat > "$ROOT_MNT/etc/systemd/system/sysclone-layer3-home.service" <<'UNIT'
 [Unit]
 Description=SysClone Layer3: Install Nix + Home Manager and apply home config
