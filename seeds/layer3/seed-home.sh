@@ -2,11 +2,11 @@
 set -Eeuo pipefail
 # Seed Layer 3: Nix (multi-user) + Home Manager on Arch target (host-side)
 # Writes onto TARGET rootfs:
-#   - /usr/local/sbin/sysclone-layer3-home.sh  (runtime-smart, auto-username)
+#   - /usr/local/sbin/sysclone-layer3-home.sh  (runner)
 #   - /etc/systemd/system/sysclone-layer3-home.service
 #   - /etc/sysclone/home/{flake.nix,home.nix,modules/00-user.nix}
-#   - /etc/sysclone/home/vendor/{home-manager,nixpkgs} (copied from repo if present)
-# Does NOT chroot.
+#   - /etc/sysclone/home/vendor/{home-manager,nixpkgs} if present in seeds
+# Requires ROOT_MNT to be set by the Makefile (we do NOT chroot).
 
 ROOT_MNT="${ROOT_MNT:?ROOT_MNT is required}"
 USERNAME="${USERNAME:-username}"
@@ -15,14 +15,13 @@ HM_USER="${HM_USER:-$USERNAME}"
 install -d -m 755 \
   "$ROOT_MNT/usr/local/sbin" \
   "$ROOT_MNT/etc/systemd/system" \
-  "$ROOT_MNT/etc/sysclone/home" \
-  "$ROOT_MNT/etc/sysclone/home/vendor" \
   "$ROOT_MNT/etc/sysclone/home/modules" \
+  "$ROOT_MNT/etc/sysclone/home/vendor" \
   "$ROOT_MNT/var/lib/sysclone" \
   "$ROOT_MNT/etc/nix" \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 
-# ---------- copy vendored submodules from HOST to CARD (if present) ----------
+# ---------- copy vendored repos from HOST to CARD (if present) ----------
 if [[ -d "seeds/layer3/vendor/home-manager" ]]; then
   rsync -a --delete "seeds/layer3/vendor/home-manager/" "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/"
 fi
@@ -47,7 +46,7 @@ if [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/nixpkgs/.git" && -d "$ROOT_MNT/etc/
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -68,7 +67,7 @@ elif [[ -d "$ROOT_MNT/etc/sysclone/home/vendor/home-manager/.git" ]]; then
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -89,7 +88,7 @@ else
     pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
   in {
     homeConfigurations.${username} = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs; modules = [ ./modules/00-user.nix ./modules/emacs-prod.nix ./home.nix ];
+      inherit pkgs; modules = [ ./modules/00-user.nix ./home.nix ];
     };
   };
 }
@@ -110,15 +109,19 @@ if [[ ! -f "$ROOT_MNT/etc/sysclone/home/home.nix" ]]; then
 HOME
 fi
 
-# guard module: ALWAYS write, idempotent overwrite
-cat > "$ROOT_MNT/etc/sysclone/home/modules/00-user.nix" <<'USR'
-{ config, pkgs, ... }: {
-  home.username = "USERNAME_PLACEHOLDER";
-  home.homeDirectory = "/home/USERNAME_PLACEHOLDER";
+# guard module to ensure username is set (included before home.nix)
+cat > "$ROOT_MNT/etc/sysclone/home/modules/00-user.nix" <<'MOD'
+{ config, lib, ... }:
+let u = config.home.username or null;
+in {
+  assertions = [{
+    assertion = u != null;
+    message = "SysClone L3: home.username must be set in flake before activation";
+  }];
 }
-USR
+MOD
 
-# ---------- on-target runner (auto-username; 3 sed substitutions; retries) ----------
+# ---------- on-target runner (baked-in perms & tangle dir fix) ----------
 cat > "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'EOS'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -132,7 +135,7 @@ ENV_FILE="/etc/sysclone/firstboot.env"
 [[ -r "$ENV_FILE" ]] && . "$ENV_FILE"
 
 # Resolve USERNAME:
-# 1) env; 2) first uid>=1000; 3) "username"
+# 1) from env if provided; 2) first uid>=1000 user; 3) fallback "username"
 if [[ -z "${USERNAME:-}" ]]; then
   USERNAME="$(awk -F: '$3>=1000 && $1!="nobody"{print $1; exit}' /etc/passwd || true)"
   USERNAME="${USERNAME:-username}"
@@ -173,19 +176,31 @@ HM_DIR="/etc/sysclone/home"
 if [[ ! -f "$HM_DIR/flake.nix" ]]; then log "HM flake missing at $HM_DIR"; exit 1; fi
 if ! id -u "$USERNAME" >/dev/null 2>&1; then log "user $USERNAME missing"; exit 1; fi
 
-# Substitute USERNAME_PLACEHOLDER in all seeded files (idempotent)
+# Fill placeholders using the resolved USERNAME (idempotent)
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/flake.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/home.nix" || true
 sed -i "s/USERNAME_PLACEHOLDER/${USERNAME//\//\\/}/" "$HM_DIR/modules/00-user.nix" || true
 
+# Ensure home dirs exist and are user-owned BEFORE HM activation
 chown -R "$USERNAME:$USERNAME" "$HM_DIR"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME"
 install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.cache" "/home/$USERNAME/.config" "/home/$USERNAME/.local/state"
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
 install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local"
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/bin"
-# safety: if anything under ~/.local got root-owned earlier, fix it
 chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.local" || true
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/bin"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config"
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" || true
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/modules"
+install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/emacs_babel_config"
+
+# Make the tangle destination a real, writable dir (not a symlink)
+EMACS_TANGLE_DIR="/home/$USERNAME/.config/emacs-prod/emacs_babel_config/modules"
+if [[ -L "$EMACS_TANGLE_DIR" ]] || [[ ! -w "$EMACS_TANGLE_DIR" ]]; then
+  rm -rf "$EMACS_TANGLE_DIR" 2>/dev/null || true
+  install -d -m 755 -o "$USERNAME" -g "$USERNAME" "$EMACS_TANGLE_DIR"
+fi
 
 # Prefer vendored Home Manager if present
 if [[ -d "$HM_DIR/vendor/home-manager/.git" ]]; then
@@ -240,78 +255,3 @@ UNIT
 
 ln -sf ../sysclone-layer3-home.service \
   "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/sysclone-layer3-home.service"
-
-# ----- Ensure Nix is on PATH for login shells (system-wide) -----
-install -d -m 755 "$ROOT_MNT/etc/profile.d" "$ROOT_MNT/etc/zsh"
-cat > "$ROOT_MNT/etc/profile.d/99-nix-daemon.sh" <<'EOPATH'
-# Nix (multi-user) login shell integration
-if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
-  . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-fi
-EOPATH
-
-# Zsh login shells source zprofile
-if ! grep -qs 'nix-daemon.sh' "$ROOT_MNT/etc/zsh/zprofile" 2>/dev/null; then
-  {
-    echo '# Source Nix daemon env on login (added by sysclone Layer3)'
-    echo '[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
-  } >> "$ROOT_MNT/etc/zsh/zprofile"
-fi
-# ----- HM modules from repo -> CARD -----
-if [[ -d "seeds/layer3/home-modules" ]]; then
-  install -d -m 755 "$ROOT_MNT/etc/sysclone/home/modules"
-  rsync -a "seeds/layer3/home-modules/" "$ROOT_MNT/etc/sysclone/home/modules/"
-fi
-# ----- Optional dotfiles from repo -> CARD -----
-if [[ -d "seeds/layer3/dotfiles" ]]; then
-  install -d -m 755 "$ROOT_MNT/etc/sysclone/home/dotfiles"
-  rsync -a "seeds/layer3/dotfiles/" "$ROOT_MNT/etc/sysclone/home/dotfiles/"
-fi
-# ----- sysclone: ensure ~/.local exists & owned before ~/.local/bin in runner -----
-# We append into the runner file on the CARD to avoid fragile seed-time text surgery.
-# Only inject once.
-if ! grep -q '/home/\$USERNAME/.local/bin' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
-  ed -s "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'ED'
-/^chown -R "\$USERNAME:\$USERNAME" "\$HM_DIR"$/
-a
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local"
-chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.local" || true
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/bin"
-.
-w
-q
-ED
-fi
-# ----- sysclone: ensure ~/.config exists & owned before emacs-prod tangle -----
-# Patch the runner ON THE CARD (after it’s written) to self-heal ~/.config.
-if ! grep -q '/home/\$USERNAME/.config/emacs-prod' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
-  ed -s "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'ED'
-/^chown -R "\$USERNAME:\$USERNAME" "\$HM_DIR"$/
-a
-# Ensure ~/.config is user-owned and emacs-prod dirs exist
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config"
-chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" || true
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod"
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/modules"
-.
-w
-q
-ED
-fi
-## sysclone: ensure ~/.config exists & owned before emacs-prod tangle
-# ----- sysclone: ensure ~/.config is user-owned and emacs-prod/modules exist -----
-# Patch the runner on the card after it is written
-if ! grep -q '/home/\$USERNAME/.config/emacs-prod/modules' "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh"; then
-  ed -s "$ROOT_MNT/usr/local/sbin/sysclone-layer3-home.sh" <<'ED'
-/^chown -R "\$USERNAME:\$USERNAME" "\$HM_DIR"$/
-a
-# config self-heal
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config"
-chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" || true
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod"
-install -d -m 755 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.config/emacs-prod/modules"
-.
-w
-q
-ED
-fi
